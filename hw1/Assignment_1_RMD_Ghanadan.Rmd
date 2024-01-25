@@ -1,0 +1,316 @@
+---
+title: 'EDS241: Assignment 1'
+author: "Linus Ghanadan"
+date: "1/23/2024"
+output:
+  html_document:
+    toc: no
+    df_print: paged
+  pdf_document:
+    toc: no
+    number_sections: yes
+header-includes:
+- \setlength{\parindent}{1em}
+- \usepackage{float}
+--- 
+  
+``` {r setup, echo = FALSE, message = FALSE, warning = FALSE}
+
+# set default chunk options
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3, 
+                      echo = TRUE, message = FALSE, warning = FALSE)
+
+# load packages
+packages=c("MASS", "tidyverse", # Used in assignment 1
+           "stargazer", "here", "tidyr", "dplyr","stringr", "janitor", # Used for Mock assignment
+           "cowplot", "ggplot2", "tinytex", "datasets", "tibble") # Used for Mock assignment
+
+for (i in packages) {
+  if (require(i,character.only=TRUE)==FALSE) {
+    install.packages(i,repos='http://cran.us.r-project.org')
+  }
+  else {
+    require(i,character.only=TRUE)
+  }
+}
+
+# Disable scientific notation if you want
+options(scipen=999)
+
+```
+
+# Part 1 
+(NOTE: Uses the RCT.R code provided with lecture to generate data) 
+DO NOT CHANGE ANYTHING BELOW UNTIL IT SAYS EXPLICITLY
+
+```{r , include=FALSE}
+
+# Generate data on potential outcomes and pre-treatment covariates:
+
+  rm(list=ls())
+  library(MASS)
+# Define variables and generate data:
+  N <- 20000
+  Xi <- sample(c(1,2,3,4,5),N, replace=TRUE)
+  m0_Xi <- 0.5*Xi
+  m1_Xi <- 1*Xi
+# Generate correlated error terms:
+  ei <- mvrnorm(n=N,mu=c(0, 0),Sigma=matrix(c(1,0.75,0.75,1), ncol=2))
+# Calculate potential outcomes:
+  Yi_0 = m0_Xi + ei[,1]		
+  Yi_1 = m1_Xi + ei[,2]
+# Output the mean of the potential outcomes:
+  mean(Yi_0)
+  mean(Yi_1)
+# Create a dataframe from the vectors:
+  df <- data.frame(Xi, Yi_0, Yi_1)
+
+```
+## BELOW YOU CAN (AND HAVE TO) CHANGE AND ADD CODE TO DO ASSIGNMENT  
+Part 1: Use the small program above that generates synthetic potential outcomes without treatment, Yi_0, and with treatment, Yi_1. When reporting findings, report them using statistical terminology (i.e. more than y/n.)  Please do the following and answer the respective questions (briefly). 
+
+a) Create equally sized treatment and control groups by creating a binary random variable Di where the units with the "1’s” are chosen randomly.
+```{r}
+# Set seed
+set.seed(123)
+
+# Create binary random variable
+df$Di <- sample(c(0, 1), N, replace = TRUE)
+```
+
+
+
+
+
+b) Make two separate histograms of Xi for the treatment and control group. What do you see and does it comply with your expectations, explain why or why not?
+```{r}
+# Create 'Group' column specifying whether treatment or control group
+df_new <- df %>%
+  mutate(Group = ifelse(Di == 1, "Treatment", "Control"))
+
+# Plot histograms
+ggplot(df_new, aes(x = Xi, fill = factor(Di))) +
+  geom_histogram(alpha = 0.7, bins = 30, position = "dodge") +
+  labs(title = "Xi histograms",
+       x = "Xi",
+       y = "Frequency") +
+  scale_fill_manual(values = c("blue", "red")) +
+  facet_wrap(~Group) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+[The frequency of each Xi within each group is about 2000, which is what we would expect. This is expected because, in this example, Xi could take on one of five values, and we had 20000 units in total, split equally between the control and treatment groups. The difference between the control and treatment groups for Xi = 3 is somewhat surprising, as the control group has a frequency over 2000, while the treatment group has less than 2000. However, it seems reasonable to assume that this just happened by chance.]{style="color:navy;"}
+
+
+
+
+
+
+
+c) Test whether Di is uncorrelated with the pre-treatment characteristic Xi and report your finding.
+```{r}
+# T-test to compare mean Xi between treatment and control groups
+t.test(Xi ~ Di, data = df)
+```
+[We fail to reject the null hypothesis that the true correlation is equal to zero, and since we got an especially high p-value (0.8395), we can be very confident that treatment assignment Di is uncorrelated with pre-treatment characteristic Xi.]{style="color:navy;"}
+
+
+
+
+
+
+
+
+d) Test whether Di is uncorrelated with the potential outcomes Yi_0 and Yi_1 and report your finding (only possible for this synthetic dataset where we know all potential outcomes).
+```{r}
+# T-test to compare mean Yi_0 between treatment and control groups
+t.test(Yi_0 ~ Di, data = df)
+```
+
+```{r}
+# T-test to compare mean Yi_1 between treatment and control groups
+t.test(Yi_1 ~ Di, data = df)
+```
+
+[Regarding the potential outcome variable for both the treatment (Yi_0) and control (Yi_1) groups, we fail to reject the null hypothesis that the true correlation with treatment (Di) is equal to zero. Our p-values are high (0.5668 for Yi_0 and 0.4518 for Yi_1), so we can be pretty confident that treatment assignment is uncorrelated with the potential outcome for both the treatment and control groups.]{style="color:navy;"}
+
+
+
+
+
+
+
+
+e) Estimate the ATE by comparing mean outcomes for treatment and control group. Test for mean difference between the groups and report your findings.
+
+```{r}
+# Calculate ATE point estimate
+ATE_point_estimate <- mean(df$Yi_1 - df$Yi_0)
+ATE_point_estimate
+```
+
+```{r}
+# T-test to compare ATE between treatment and control groups
+t.test(Yi_1 - Yi_0 ~ Di, data = df)
+```
+[We fail to reject the null hypothesis that the difference in ATE is not equal to zero. Our p-value is high (0.5468), so we can be pretty confident that any differences in potential outcome between the treatment and control groups are negligible.]{style="color:navy;"}
+
+
+
+
+
+
+
+
+
+f) Estimate the ATE using a simple regression of (i) Yi on Di and (ii) Yi on Di and Xi and report your findings.
+```{r}
+# Run simple regression of Yi on Di
+model1 <- lm(Yi_1 - Yi_0 ~ Di, data = df)
+
+# Display regression summary
+summary(model1)
+```
+
+```{r}
+# Run simple regression of Yi on Di and Xi
+model2 <- lm(Yi_1 - Yi_0 ~ Di + Xi, data = df)
+
+# Display regression summary
+summary(model2)
+```
+[In the first regression, we estimate the average ATE (across both the treatment and control group) to be 1.50, and we have >99% confidence that this average ATE is greater than 0. In addition, we find that being in the treatment group is associated with a 0.000355 unit increase in expected ATE, though the very high p-value means that we are very unsure if the change in ATE is actually greater than zero. Then, after controlling for pre-treatment characteristic Xi, we estimate the average ATE (across both the treatment and control group) to be 0.004, and our p-value is high, indicating that we have basically no idea whether ATE is greater than or less than zero. Like with the previous regression, we find that we are very uncertain about how a change in treatment impacts ATE. Lastly, we find that a one-unit increase in the pre-treatment characteristic Xi is associated with a 0.497 unit increase in ATE, and we are >99% confident that there is a positive relationship between Xi and ATE.]{style="color:navy;"}
+
+\newpage
+
+# Part 2
+\indent Part 2 is based on Gertler, Martinez, and Rubio-Codina (2012) (article provided on canvas) and covers impact evaluation of the Mexican conditional cash transfer Progresa (later called Oportunidades, now Prospera). Basically, families with low-incomes received cash benefits if they complied to certain conditions, such as regular school attendance for children and regular healthcare visits. You can read more about the program in the Boxes 2.1 (p.10) & 3.1 (p.40) of the Handbook on impact evaluation: quantitative methods and practices by Khandker, B. Koolwal, and Samad (2010). The program followed a randomized phase-in design. You have data on households (hh) from 1999, when treatment hh have been receiving benefits for a year and control hh have not yet received any benefits. You can find a description of the variables at the end of the assignment. Again, briefly report what you find or respond to the questions.
+
+```{r , include=FALSE}
+
+# Load the dataset
+progresa <- read.csv("progresa.csv")
+
+```
+
+a) Some variables in the dataset were collected in 1997 before treatment began. Use these variables to test whether there are systematic differences between the control and the treatment group before the cash transfer began (i.e. test for systematic differences on all 1997 variables). Describe your results. Does it matter whether there are systematic differences? Why or why not?  Would it be a mistake to do the same test with these variables if they were collected after treatment began and if so why? Note: If your variable is a proportion (e.g. binary variables), you should use a proportions test, otherwise you can use a t-test.
+
+```{r}
+# Subset data for treatment and control groups
+treatment_group <- progresa[progresa$treatment == 1, ]
+control_group <- progresa[progresa$treatment == 0, ]
+
+# T-test to compare mean 1997 household size (continuous variable) between treatment and control groups
+t.test(treatment_group$hhsize97, control_group$hhsize97)
+
+# Compare proportion of units that had dirt floor in 1997 (binary variable) between treatment and control group
+prop.test(x = c(sum(treatment_group$dirtfloor97, na.rm = TRUE), sum(control_group$dirtfloor97, na.rm = TRUE)),
+          n <- c(length(treatment_group$dirtfloor97), length(control_group$dirtfloor97)))
+
+# Compare proportion of units that had electricity in 1997 (binary variable) between treatment and control group
+prop.test(x = c(sum(treatment_group$electricity97, na.rm = TRUE), sum(control_group$electricity97, na.rm = TRUE)),
+          n <- c(length(treatment_group$electricity97), length(control_group$electricity97)))
+
+# Compare proportion of units that had bathroom in 1997 (binary variable) between treatment and control group
+prop.test(x = c(sum(treatment_group$bathroom97, na.rm = TRUE), sum(control_group$bathroom97, na.rm = TRUE)),
+          n <- c(length(treatment_group$bathroom97), length(control_group$bathroom97)))
+
+# Compare proportion of units that owned home in 1997 (binary variable) between treatment and control group
+prop.test(x = c(sum(treatment_group$homeown97, na.rm = TRUE), sum(control_group$homeown97, na.rm = TRUE)),
+          n <- c(length(treatment_group$homeown97), length(control_group$homeown97)))
+
+```
+[From our t-test comparing mean 1997 household size (continuous variable) between treatment and control groups, we reject our null hypothesis that there is no difference in the two means with >99% confidence. Specifically, the mean 1997 household size is 5.78 square units for the treatment group and 5.51 square units for the control group. Regarding the three of the four proportion tests that compare binary variable pre-treatment characteristics across the treatment and control group, we reject our null hypotheses that the two groups are the same, with >99% confidence in all three cases. For the dirt floor variable, we find that 64% of the treatment group and 58% of the control group had dirt floors in 1997. Secondly, for the electricity variable, we find that 56% of the treatment group and 63% of the control group had electricity in 1997. Thirdly, for the home ownership variable, we find that 85% of the treatment group and 81% of the control group were home owners in 1997. Lastly, our proportion test comparing having an exclusive household bathroom in 1997 between treatment and control groups was the only one of our tests where we failed to reject the null hypothesis that the two groups were the same. In both groups, 50% of units had access to an exclusive bathroom.]{style="color:navy;"}
+[It does not necessarily matter if there are systematic differences between the treatment and control group, so long as the difference does not appear to be too extreme within the context of the specific natural experiment being conducted. In this case, even though the differences are statistically significant, they do not seem too extreme within the context of this study. In fact, the differences being statistically significant appears to largely be due to the high sample size, which also has a very positive effect on the external validity of the study. While having systematic differences certainly hurts the internal validity of the study, it doesn't disqualify it from being a useful natural experiment.]{style="color:navy;"}
+[If the data on these variables was collected after treatment began, it would be a mistake to the same tests. The reason why we are doing the tests is so we can understand the baseline characteristics of units in the treatment and control groups, so running these tests based on data that was collected after treatment began would give us irrelevant results. In addition, if there was a problematic difference between groups, there would not be an opportunity to reassign units to achieve a better balance in pre-treatment characteristics.]{style="color:navy;"}
+
+
+
+
+
+
+
+
+b) Estimate the impact of program participation on the household’s value of animal holdings (vani) using a simple univariate regression. Interpret the intercept and the coefficient. Is this an estimate of a treatment effect?
+
+```{r}
+# Run simple regression for impact of treatment on household's value of animal holdings
+vani_reg <- lm(vani ~ treatment, data = progresa)
+
+# Display regression summary
+summary(vani_reg)
+```
+[On average, households that did not participate in the program had 1,691.47 dollars worth of animal holdings. Program participation is associated with a 50.21 dollar increase in value of a household's animal holdings. 50.21 dollars is an estimate of the average treatment effect on the treated (ATT), as it is using the control group as a counterfactual to compare to.]{style="color:navy;"}
+
+
+
+
+
+
+
+
+c) Now, include at least 6 independent control variables in your regression. How does the impact of program participation change? Choose one of your other control variables and interpret the coefficient.
+
+```{r}
+# Run simple regression for impact of treatment on household's value of animal holdings, controlling for nine unit characteristics (mean 1997 household size, having a dirt floor in 1997, having electricity in 1997, having a bathroom in 1997, owning home in 1997, spouse's education, and the gender, age, and education of the head of household)
+vani_reg2 <- lm(vani ~ treatment + hhsize97 + dirtfloor97 + electricity97 + bathroom97 + homeown97 + educ_sp + female_hh + age_hh + educ_hh, data = progresa)
+
+# Display regression summary
+summary(vani_reg2)
+```
+[The impact of program participation increases nearly three-fold after we add these nine controls. Compared to an ATT of 50.21 dollars computed in the regression with no controls, we now compute an ATT of 145.01 dollars.]{style="color:navy;"}
+[Interpretation of 'dirtfloor97' coefficient: Having a dirt floor in 1997 is associated with $1,046.87 decrease in value of a household's animal holdings, controlling for program participation (and eight other unit characteristics).]{style="color:navy;"}
+
+
+
+
+
+
+
+
+
+d) The dataset also contains a variable intention_to_treat. This variable identifies eligible households in participating villages. Most of these households ended up in the treatment group receiving the cash transfer, but some did not. Test if the program has an effect on the value of animal holdings of these non-participants (spillover effects). Think of a reason why there might or might not be spillover effects. 
+
+\noindent Hint: Create a pseudo-treatment variable that is = 1 for individuals who were intended to get treatment but did not receive it, = 0 for the normal control group and excludes the normal treatment group.
+
+```{r , include=FALSE}
+# Replace NAs in treatment column with 0s
+progresa_itt_df <- progresa %>%
+  mutate(treatment = replace_na(treatment, 0))
+
+# Examine number of hh that were intended to get treatment and that ended up receiving treatment
+table(treatment = progresa_itt_df$treatment, intention_to_treat = progresa_itt_df$intention_to_treat, exclude = NULL)
+
+# Create a new treatment variable that is:
+# = 1 if intention_to_treat == 1 AND not in the actual treatment
+# = 0 for normal control hh.
+
+# This creates a new variable called pseudo_treatment that has missing values for every hh
+progresa_itt_df$pseudo_treatment <- NA
+
+# Replace NAs with 1 for the new intervention group
+progresa_itt_df$pseudo_treatment[progresa_itt_df$intention_to_treat == 1 & progresa_itt_df$treatment == 0] <- 1
+
+# Replace NAs with 0 for the normal control group
+progresa_itt_df$pseudo_treatment[is.na(progresa_itt_df$pseudo_treatment)] <- 0
+```
+
+```{r}
+# Run simple regression for impact of "pseudo-treatment" on household's value of animal holdings
+pseudo_treatment_reg <- lm(vani ~ pseudo_treatment, data = progresa_itt_df)
+
+# Display regression summary
+summary(pseudo_treatment_reg)
+```
+```{r}
+# Run simple regression for impact of treatment on household's value of animal holdings, controlling for nine unit characteristics (mean 1997 household size, having a dirt floor in 1997, having electricity in 1997, having a bathroom in 1997, owning home in 1997, spouse's education, and the gender, age, and education of the head of household)
+pseudo_treatment_reg2 <- lm(vani ~ pseudo_treatment + hhsize97 + dirtfloor97 + electricity97 + bathroom97 + homeown97 + educ_sp + female_hh + age_hh + educ_hh, data = progresa_itt_df)
+
+# Display regression summary
+summary(pseudo_treatment_reg2)
+```
+
+
+[It is unclear whether the program had an effect on the value of animal holdings among non-participants that were eligible to be in the program. Neither of the two regressions we ran (one without controls and one with) provided us with a statistically significant result, though both did estimate that "pseudo-treatment" had a positive effect. My inclination is that there was some minor spillovers, given that the p-value in our regression with controls was reasonably low at 0.176. It also makes sense logically to me that there would be some spillover effects because people who did get the cash transfers might share some of their cash with non-participants that live in their town, especially if the two individuals are family or friends.]{style="color:navy;"}
+

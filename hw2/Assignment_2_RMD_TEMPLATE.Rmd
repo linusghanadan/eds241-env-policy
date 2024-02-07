@@ -1,0 +1,359 @@
+---
+title: "EDS241: Assignment 2"
+author: "Linus Ghanadan"
+date: '`r format(Sys.time(), "%m/%d/%Y")`'
+output: 
+  pdf_document:
+    toc: false
+    number_sections: yes
+header-includes:
+  \setlength{\parindent}{1em}
+  \usepackage{float}
+  \renewcommand{\thesubsection}{Question (\alph{subsection})}
+--- 
+
+**Reminders:** Make sure to read through the setup in markdown. Remember to fully report/interpret your results and estimates (in writing) + present them in tables/plots.
+``` {r setup, echo = FALSE, message = FALSE, warning = FALSE}
+#Clean Environment
+rm(list=ls())
+
+# Setup your coding process in a way that works for you. Ideally use projects to organize your scripts and outputs. You all probably know more about this than us! For this project, I would create a project with all your data and scripts. I often store data on servers rather than my computer which is why I use the code you see below.
+
+# I set an extension to retrieve data from a particular place (Google Drive/servers etc) and projects to organize my scripts and outputs on my computer/github.
+
+# here I am setting a path to where I stored the data for this assignment
+# data_wd <- "/Users/elliottfinn/Library/CloudStorage/GoogleDrive-elliottfinn@ucsb.edu/Shared drives/EDS241/Assignments/Assignment 2" 
+
+# Example of how I use this Data Working Directory:
+# data <- read_csv(paste0(data_wd,"/FILE_NAME.csv")) This helps me download/manage my data from different places.
+
+# set default chunk options
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3, 
+                      echo = TRUE, message = FALSE, warning = FALSE)
+
+# load packages
+packages=c(
+# Necessary for Assignment 2
+  "Match","plm", "tidyverse", "MatchIt", "RItools", "Hmisc", "lmtest", "estimatr",
+# You decide what works for you, these are the packages I use to display results ect, they may not be the ones you use.
+
+"gridExtra", "stargazer", "kableExtra",
+"purrr", "knitr", "broom",
+   
+  # Some Potentially useful packages from earlier examples
+           "stargazer", "here", "tidyr", "dplyr","stringr", "janitor", 
+           "cowplot", "ggplot2", "tinytex", "datasets", "tibble") # Used for Mock assignment
+
+for (i in packages) {
+  if (require(i,character.only=TRUE)==FALSE) {
+    install.packages(i,repos='http://cran.us.r-project.org')
+  }
+  else {
+    require(i,character.only=TRUE)
+  }
+}
+
+# Disable scientific notation if you want
+options(scipen=999)
+
+```
+
+# Part 1 Treatment Ignorability Assumption and Applying Matching Estimators (19 points):
+The goal is to estimate the causal effect of maternal smoking during pregnancy on infant birth weight using the treatment ignorability assumptions. The data are taken from the National Natality Detail Files, and the extract “SMOKING_EDS241.csv”' is a random sample of all births in Pennsylvania during 1989-1991. Each observation is a mother-infant pair. The key variables are:
+
+**The outcome and treatment variables are:**
+
+\indent birthwgt=birth weight of infant in grams
+
+\indent tobacco=indicator for maternal smoking
+
+**The control variables are:**
+
+\indent mage (mother's age), meduc (mother's education), mblack (=1 if mother identifies as Black), alcohol (=1 if consumed alcohol during pregnancy), first (=1 if first child), diabete (=1 if mother diabetic), anemia (=1 if mother anemic)
+
+```{r , include=TRUE}
+
+# Load data for Part 1
+smoking_df <- read_csv(here("data", "SMOKING_EDS241.csv"))
+
+```
+
+## Mean Differences, Assumptions, and Covariates _(3 pts)_
+a) What is the mean difference in birth weight of infants with smoking and non-smoking mothers [1 pts]?  Under what assumption does this correspond to the average treatment effect of maternal smoking during pregnancy on infant birth weight [0.5 pts]? Calculate and create a table demonstrating the differences in the mean proportions/values of covariates observed in smokers and non-smokers (remember to report whether differences are statistically significant) and discuss whether this provides empirical evidence for or against this assumption. Remember that this is observational data. What other quantitative empirical evidence or test could help you assess the former assumption? [1.5 pts: 0.5 pts table, 1 pts discussion]
+
+
+```{r , include=TRUE}
+## Calculate mean difference. Remember to calculate a measure of statistical significance
+ATE <- mean(smoking_df$birthwgt[smoking_df$tobacco == 1]) - mean(smoking_df$birthwgt[smoking_df$tobacco == 0])
+ATE
+
+t.test(smoking_df$birthwgt[smoking_df$tobacco == 1], smoking_df$birthwgt[smoking_df$tobacco == 0])
+
+## For continuous variables you can use the t-test
+#t.test()
+
+## For binary variables you should use the proportions test
+#prop.test()
+
+## Covariate Calculations and Tables (feel free to use code from Assignment 1 key)
+
+# Selecting binary and continuous variables from the dataset
+covariate_binary <- smoking_df %>%
+  select(tobacco, anemia, diabete, alcohol, mblack, first)
+covariate_continuous <- smoking_df %>%
+  select(tobacco, mage, meduc)
+
+
+# Initialize empty data frames to store results of tests
+prop_test_results <- data.frame()
+t_test_results <- data.frame()
+
+# Identifying binary variables for proportion tests
+for (i in names(covariate_binary)) {
+  # Splitting the data into treated and untreated groups for the current variable
+  treated <- covariate_binary %>%
+    filter(tobacco == 1) %>%
+    pull(!!sym(i))
+  untreated <- covariate_binary %>% 
+    filter(tobacco == 0) %>%
+    pull(!!sym(i))
+  
+  # Performing the proportion test
+  prop_test_result <- prop.test(x = c(sum(treated), sum(untreated)), 
+                                n = c(length(treated), length(untreated)),
+                                correct = FALSE)
+  
+  # Storing the tidy results of the proportion test in the data frame
+  prop_test_result_tidy <- broom::tidy(prop_test_result)
+  prop_test_result_tidy$Variable <- i
+  prop_test_results <- rbind(prop_test_results, prop_test_result_tidy)
+  
+}
+
+# Identifying continuous variables for t-tests
+for (u in names(covariate_continuous)) {
+  # Dynamically creating the formula for the t-test
+  formula <- as.formula(paste(u, "~ tobacco"))
+  
+  # Performing the t-test
+  t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
+  
+  # Storing the tidy results of the t-test in the data frame
+  t_test_result_tidy <- broom::tidy(t_test_result)
+  t_test_result_tidy$Variable <- u
+  t_test_results <- rbind(t_test_results, t_test_result_tidy)
+  
+}
+
+```
+
+
+
+## ATE and Covariate Balance _(3 pts)_
+b) Assume that maternal smoking is randomly assigned conditional on the observable covariates listed above. Estimate the effect of maternal smoking on birth weight using an OLS regression with NO linear controls for the covariates [0.5 pts]. Perform the same estimate including the control variables [0.5 pts]. Next, compute indices of covariate imbalance between the treated and non-treated regarding these covariates (see example file from class). Present your results in a table [1 pts]. What do you find and what does it say regarding whether the assumption you mentioned responding to a) is fulfilled? [1 pts]
+
+```{r}
+# Assuming model_1 and model_2 are your model objects
+coefficients_model_1 <- model_1["coefficients"]
+coefficients_model_2 <- model_2["coefficients"]
+
+# Identify all unique coefficients names
+all_coeff_names <- union(names(coefficients_model_1), names(coefficients_model_2))
+
+# Create aligned vectors with NA for missing coefficients
+aligned_model_1 <- setNames(vector("numeric", length(all_coeff_names)), all_coeff_names)
+aligned_model_2 <- setNames(vector("numeric", length(all_coeff_names)), all_coeff_names)
+
+# Fill the aligned vectors with existing coefficients, missing values will remain NA
+names(aligned_model_1)[names(aligned_model_1) %in% names(coefficients_model_1)] <- coefficients_model_1
+names(aligned_model_2)[names(aligned_model_2) %in% names(coefficients_model_2)] <- coefficients_model_2
+
+# Combine into a data frame
+combined_df <- data.frame(model_1 = aligned_model_1, model_2 = aligned_model_2)
+
+# Show the combined data frame
+print(combined_df)
+
+```
+
+
+```{r}
+# Assuming model_1 and model_2 are your model objects
+coefficients_model_1 <- model_1$coefficients
+coefficients_model_2 <- model_2$coefficients
+
+# Create a vector for model_1 coefficients aligned with model_2's coefficients
+# Initialize a named vector with names from model_2 and all values set to NA
+aligned_model_1 <- setNames(rep(NA, length(coefficients_model_2)), names(coefficients_model_2))
+
+# Fill aligned_model_1 with coefficients_model_1 values where names match
+names_in_both <- names(coefficients_model_1) %in% names(coefficients_model_2)
+aligned_model_1[names(coefficients_model_1)[names_in_both]] <- coefficients_model_1[names_in_both]
+
+# Combine into a data frame
+combined_df <- data.frame(model_1 = aligned_model_1, model_2 = coefficients_model_2)
+
+# Extract standard errors from each model summary
+se_model_1 <- summary(model_1)$coefficients[, "Std. Error"]
+se_model_2 <- summary(model_2)$coefficients[, "Std. Error"]
+
+# Align se_model_1 with the coefficient names of model_2, filling missing SEs with NA
+aligned_se_model_1 <- setNames(rep(NA, length(se_model_2)), names(se_model_2))
+names_in_model_1 <- names(se_model_1) %in% names(se_model_2)
+aligned_se_model_1[names(se_model_1)[names_in_model_1]] <- se_model_1[names_in_model_1]
+
+# Append the SEs as new rows in the data frame
+# Note: This assumes your data frame's row names are the coefficient names.
+# If not, you may need to adjust how you append this information.
+combined_df_with_se <- cbind(combined_df, 
+                             SE_model_1 = aligned_se_model_1, 
+                             SE_model_2 = se_model_2) %>% 
+  select(model_1, SE_model_1, model_2, SE_model_2)
+
+# Show the updated data frame with standard errors
+print(combined_df_with_se)
+```
+
+
+```{r , include=TRUE}
+
+# ATE Regression univariate
+model_1 <- lm(birthwgt ~ tobacco, data = smoking_df)
+
+
+# ATE with covariates
+model_2 <- lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df)
+
+
+# Present Regression Results
+# reg_results <- stargazer(model_1, model_2,
+#                          type = "latex", ci=FALSE, no.space = TRUE,
+#                          header = FALSE, omit = c("Constant"), omit.stat = c("adj.rsq","ser", "f"),
+#                          covariate.labels = c("tobacco", "anemia", "diabete", "alcohol", "mblack", "first", "mage", "meduc"),
+#                          dep.var.labels = c("birthwgt"), dep.var.caption = c(""),
+#                          title = "Average Treatment (tobacco) Effect on birthwgt", table.placement = "H")
+
+
+# Covariate balance
+
+# --- Computing	indices	of covariate	imbalance	before	matching
+# you will see that the tests reject the balanced distribution across all 
+# variables simultaneously (chi-square test) and for most variables separately
+# (std.diffs test) 
+xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
+         data = smoking_df, report = c("std.diffs", "chisquare.test")) %>% 
+  kbl() %>% 
+  kable_classic(full_width = FALSE)
+
+
+```
+
+
+
+## Propensity Score Estimation _(3 pts)_
+c) Next, estimate propensity scores (i.e. probability of being treated) for the sample, using the provided covariates. Create a regression table reporting the results of the regression and discuss what the covariate coefficients indicate and interpret one coefficient [1.5 pts]. Create histograms of the propensity scores comparing the distributions of propensity scores for smokers ('treated') and non-smokers ('control'), discuss the overlap and what it means [1.5 pts].
+
+```{r , include=TRUE}
+
+## Propensity Scores
+
+
+## PS Histogram Unmatched 
+
+```
+
+## Matching Balance _(3 pts)_
+(d) Next, match treated/control mothers using your estimated propensity scores and nearest neighbor matching. Compare the balancing of pretreatment characteristics (covariates) between treated and non-treated units in the original dataset (from c) with the matched dataset (think about comparing histograms/regressions) [2 pts]. Make sure to report and discuss the balance statistics [1 pts].
+
+```{r , include=TRUE}
+
+## Nearest-neighbor Matching
+
+## Covariate Imbalance post matching: 
+
+
+## Histogram of PS after matching
+```
+
+## ATE with Nearest Neighbor _(3 pts)_
+(e) Estimate the ATT using the matched dataset. Report and interpret your result (Note: no standard error or significance test is required here)
+
+```{r , include=TRUE}
+
+## Nearest Neighbor 
+
+## ATT
+
+
+```
+
+## ATE with WLS Matching _(3 pts)_
+f) Last, use the original dataset and perform the weighted least squares estimation of the ATE using the propensity scores (including controls). Report and interpret your results, here include both size and precision of estimate in reporting and interpretation.
+
+```{r , include=TRUE}
+## Weighted least Squares (WLS) estimator Preparation
+
+
+## Weighted least Squares (WLS) Estimates
+
+
+## Present Results
+
+```
+
+## Differences in Estimates _(1 pts)_ 
+g) Explain why it was to be expected given your analysis above that there is a difference between your estimates in e) and f)? 
+
+
+
+\newpage
+
+# Part 2 Panel model and fixed effects (6 points)
+\indent We will use the  progresa data from last time as well as a new dataset. In the original dataset, treatment households had been receiving the transfer for a year. Now, you get an additional dataset with information on the same households from before the program was implemented, establishing a baseline study (from 1997), and the same data we worked with last time (from 1999).
+\indent *Note: You will need to install the packages plm and dplyr (included in template preamble). Again, you can find a description of the variables at the bottom of PDF and HERE.
+
+## Estimating Effect with First Difference _(3 pts: 1.5 pts estimate, 1.5 pts interpretation)_
+Setup: Load the new baseline data (progresa_pre_1997.csv) and the follow-up data (progresa_post_1999.csv) into R. Note that we created a time denoting variable (with the same name, 'year') in BOTH datasets. Then, create a panel dataset by appending the data (i.e. binding the dataset row-wise together creating a single dataset). We want to examine the same outcome variable as before, value of animal holdings (vani).
+
+```{r , include=TRUE}
+rm(list=ls()) # clean environment
+
+## Load the datasets
+# progresa_pre_1997 <- read_csv() insert your filepath etc
+# progresa_post_1999 <- read_csv()
+
+## Append post to pre dataset 
+#progresa <- rbind(progresa_pre_1997, progresa_post_1999)
+
+```
+a) Estimate a first-difference (FD) regression manually, interpret the results briefly (size of coefficient and precision!)
+\indent *Note: Calculate the difference between pre- and post- program outcomes for each family. To do that, follow these steps and the code given in the R-template:
+
+```{r, include=TRUE}
+### Code included to help get you started
+## i. Sort the panel data in the order in which you want to take differences, i.e. by household and time.
+
+## Create first differences of variables
+# progresa <- progresa %>% 
+#   arrange(hhid, year) %>% 
+#   group_by(hhid)
+
+## ii. Calculate the first difference using the lag function from the dplyr package.
+#     mutate(vani_fd = vani - dplyr::lag(vani)) 
+
+## iii. Estimate manual first-difference regression (Estimate the regression using the newly created variables.)
+# fd_manual <- lm(vani_fd ~ ...)
+
+```
+## Fixed Effects Estimates _(2 pts: 1 pts estimate, 1.5 interpretation)_
+b) Now also run a fixed effects (FE or ‘within’) regression and compare the results. Interpret the estimated treatment effects briefly (size of coefficient and precision!)
+
+```{r, include=TRUE}
+## Fixed Effects Regression
+
+## Present Regression Results
+```
+
+## First Difference and Fixed Effects and Omitted Variable Problems _(1 pts)_
+c) Explain briefly how the FD and FE estimator solves a specific omitted variable problem? Look at the example on beer tax and traffic fatalities from class to start thinking about ommitted variables. Give an example of a potential omitted variable for the example we are working with here that might confound our results? For that omitted variable, is a FE or FD estimator better? One example is enough.
+

@@ -152,30 +152,42 @@ for (u in names(covariate_continuous)) {
 ## ATE and Covariate Balance _(3 pts)_
 b) Assume that maternal smoking is randomly assigned conditional on the observable covariates listed above. Estimate the effect of maternal smoking on birth weight using an OLS regression with NO linear controls for the covariates [0.5 pts]. Perform the same estimate including the control variables [0.5 pts]. Next, compute indices of covariate imbalance between the treated and non-treated regarding these covariates (see example file from class). Present your results in a table [1 pts]. What do you find and what does it say regarding whether the assumption you mentioned responding to a) is fulfilled? [1 pts]
 
-```{r}
-# Assuming model_1 and model_2 are your model objects
-coefficients_model_1 <- model_1["coefficients"]
-coefficients_model_2 <- model_2["coefficients"]
 
-# Identify all unique coefficients names
-all_coeff_names <- union(names(coefficients_model_1), names(coefficients_model_2))
 
-# Create aligned vectors with NA for missing coefficients
-aligned_model_1 <- setNames(vector("numeric", length(all_coeff_names)), all_coeff_names)
-aligned_model_2 <- setNames(vector("numeric", length(all_coeff_names)), all_coeff_names)
 
-# Fill the aligned vectors with existing coefficients, missing values will remain NA
-names(aligned_model_1)[names(aligned_model_1) %in% names(coefficients_model_1)] <- coefficients_model_1
-names(aligned_model_2)[names(aligned_model_2) %in% names(coefficients_model_2)] <- coefficients_model_2
 
-# Combine into a data frame
-combined_df <- data.frame(model_1 = aligned_model_1, model_2 = aligned_model_2)
+```{r , include=TRUE}
 
-# Show the combined data frame
-print(combined_df)
+# ATE Regression univariate
+model_1 <- lm(birthwgt ~ tobacco, data = smoking_df)
+
+
+# ATE with covariates
+model_2 <- lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df)
+
+
+# Present Regression Results
+# reg_results <- stargazer(model_1, model_2,
+#                          type = "latex", ci=FALSE, no.space = TRUE,
+#                          header = FALSE, omit = c("Constant"), omit.stat = c("adj.rsq","ser", "f"),
+#                          covariate.labels = c("tobacco", "anemia", "diabete", "alcohol", "mblack", "first", "mage", "meduc"),
+#                          dep.var.labels = c("birthwgt"), dep.var.caption = c(""),
+#                          title = "Average Treatment (tobacco) Effect on birthwgt", table.placement = "H")
+
+
+# Covariate balance
+
+# --- Computing	indices	of covariate	imbalance	before	matching
+# you will see that the tests reject the balanced distribution across all 
+# variables simultaneously (chi-square test) and for most variables separately
+# (std.diffs test) 
+xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
+         data = smoking_df, report = c("std.diffs", "chisquare.test", "p.values")) %>% 
+  kbl(caption = "Indices of covariate imbalance (before matching)") %>% 
+  kable_classic(full_width = FALSE)
+
 
 ```
-
 
 ```{r}
 # Assuming model_1 and model_2 are your model objects
@@ -215,40 +227,6 @@ print(combined_df_with_se)
 ```
 
 
-```{r , include=TRUE}
-
-# ATE Regression univariate
-model_1 <- lm(birthwgt ~ tobacco, data = smoking_df)
-
-
-# ATE with covariates
-model_2 <- lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df)
-
-
-# Present Regression Results
-# reg_results <- stargazer(model_1, model_2,
-#                          type = "latex", ci=FALSE, no.space = TRUE,
-#                          header = FALSE, omit = c("Constant"), omit.stat = c("adj.rsq","ser", "f"),
-#                          covariate.labels = c("tobacco", "anemia", "diabete", "alcohol", "mblack", "first", "mage", "meduc"),
-#                          dep.var.labels = c("birthwgt"), dep.var.caption = c(""),
-#                          title = "Average Treatment (tobacco) Effect on birthwgt", table.placement = "H")
-
-
-# Covariate balance
-
-# --- Computing	indices	of covariate	imbalance	before	matching
-# you will see that the tests reject the balanced distribution across all 
-# variables simultaneously (chi-square test) and for most variables separately
-# (std.diffs test) 
-xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
-         data = smoking_df, report = c("std.diffs", "chisquare.test")) %>% 
-  kbl() %>% 
-  kable_classic(full_width = FALSE)
-
-
-```
-
-
 
 ## Propensity Score Estimation _(3 pts)_
 c) Next, estimate propensity scores (i.e. probability of being treated) for the sample, using the provided covariates. Create a regression table reporting the results of the regression and discuss what the covariate coefficients indicate and interpret one coefficient [1.5 pts]. Create histograms of the propensity scores comparing the distributions of propensity scores for smokers ('treated') and non-smokers ('control'), discuss the overlap and what it means [1.5 pts].
@@ -258,7 +236,26 @@ c) Next, estimate propensity scores (i.e. probability of being treated) for the 
 ## Propensity Scores
 
 
+# --- Estimation of propensity	scores with the glm function
+# choosing family = "binomial" will pick a "logit" (or logistic) model
+ps <- glm(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc,
+          data = smoking_df, family = binomial())
+
+
+# --- Attach	the	predicted	propensity	score	to	the	datafile
+# Note: the predictions from a logit model are probabilities
+# In this case probabilities to be treated given the covariates chosen, 
+# i.e., the propensity scores
+smoking_df$psvalue <- predict(ps, type	= "response")
+
+
 ## PS Histogram Unmatched 
+
+# --- Drawing back to back histograms for propensity scores for treated and 
+# non-treated before matching
+histbackback(split(smoking_df$psvalue, smoking_df$tobacco),
+             main = "Propensity score before matching", xlab=c("control",	"treatment"))
+
 
 ```
 
@@ -269,10 +266,33 @@ c) Next, estimate propensity scores (i.e. probability of being treated) for the 
 
 ## Nearest-neighbor Matching
 
+# --- Match	using	nearest-neighbor approach, i.e. treated units are assigned the 
+# non-treated unit with the closest propensity score as match 
+# You will see that matches are found for all 185 treated units (guaranteed
+# with the nearest-neighbor approach)
+nn_matching <- matchit(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, method = "nearest", ratio = 1)
+match_data = match.data(nn_matching)
+
+
 ## Covariate Imbalance post matching: 
+
+# --- Computing	indices	of covariate	imbalance	after	matching
+# same command as above but using the matched data now
+# what you will see is that matching by propensity scores balances
+# the covariates between treated and non-treated that were used in the
+# estimation of the propensity scores
+xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df,
+         report = c("std.diffs", "chisquare.test", "p.values")) %>% 
+  kbl(caption = "Indices of covariate imbalance (after matching)") %>% 
+  kable_classic(full_width = FALSE)
 
 
 ## Histogram of PS after matching
+
+# Drawing back to back histograms for propensity scores for treated and 
+# non-treated after matching
+histbackback(split(match_data$psvalue, match_data$tobacco),
+             main= "Propensity score after matching", xlab=c("control",	"treatment"))
 ```
 
 ## ATE with Nearest Neighbor _(3 pts)_
@@ -280,9 +300,29 @@ c) Next, estimate propensity scores (i.e. probability of being treated) for the 
 
 ```{r , include=TRUE}
 
-## Nearest Neighbor 
+# --- Treatment effect estimation using average outcome difference of matched pairs
+# do this with for loop but likely more elegant approaches are possible
+# note that equal entries in "subclass" of match.data defines the match
+# this loop sums up the differences of outcomes between matches and then 
+# divides by NT to derive the mean difference as the ATE estimate
 
-## ATT
+sumdiff_data <- match_data %>%
+  group_by(subclass) %>%
+  mutate(diff = birthwgt[tobacco==1] - birthwgt[tobacco==0])
+
+sumdiff <- sum(sumdiff_data$diff)/2
+
+# 1 / number treated * sumdiff
+ATT_nn = 1/sum(match_data$tobacco) * sumdiff
+ATT_nn
+
+
+
+# NOTE: This is an ATT estimate, NOT an ATE. Why? Because we picked nearest 
+# neighbor matches only for the treated. So we defined a counterfactual only for the
+# treated. We did not do a matching for all non-treated. Only if we had done this
+# and then calculated the average outcome differences for the whole population
+# between the matched pairs would we have estimated the ATE
 
 
 ```
@@ -293,11 +333,52 @@ f) Last, use the original dataset and perform the weighted least squares estimat
 ```{r , include=TRUE}
 ## Weighted least Squares (WLS) estimator Preparation
 
+# --- estimate treatment effect with Weighted least Squares (WLS) estimator
+# Both the nearest neighbor matching estimator and the IPW estimattor do not
+# easily allow to calculated standard errors. They also do not allow to take
+# controls into consideration. Therefore the following weighted least squares
+# estimator has advantages
+
+# calculation of the weights - see slide 25 of lecture 5
+PS <- smoking_df$psvalue
+D <- smoking_df$tobacco
+
+smoking_df$wgt = (D/PS + (1-D)/(1-PS))
+
+# doing WLS without controls reproduces the IPW estimator
+# reg_wls	<-lm(re78	~ treat,
+#              data = lalonde, weights = wgt)
+# summary(reg_wls)
+
 
 ## Weighted least Squares (WLS) Estimates
 
+# With controls. Strongly advisable as outcomes depend on controls and including
+# them allows to estimate the ATE with more precision
+# --> the treatment effect has a lower standard error. Don't get confused by the
+# lack of statistical significance compared to the case without controls. It is
+# because the estimated treatment effect is smaller
+reg_wls_c	<-lm(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, weights = wgt)
+
 
 ## Present Results
+
+# Assuming reg_wls_c is your linear model object
+summary_reg <- summary(reg_wls_c)
+
+# Extracting the coefficients table, which is usually the main point of interest
+coefficients_df <- summary_reg$coefficients
+
+# Converting the matrix to a data frame if needed (it might already be a matrix)
+coefficients_df <- as.data.frame(coefficients_df)
+
+# Using kable to format the coefficients table
+kable(coefficients_df, caption = "WLS estimates")
+
+
+
+
+
 
 ```
 

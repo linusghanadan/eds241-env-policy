@@ -358,7 +358,7 @@ smoking_df$wgt = (D/PS + (1-D)/(1-PS))
 # --> the treatment effect has a lower standard error. Don't get confused by the
 # lack of statistical significance compared to the case without controls. It is
 # because the estimated treatment effect is smaller
-reg_wls_c	<-lm(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, weights = wgt)
+reg_wls_c	<-lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, weights = wgt)
 
 
 ## Present Results
@@ -400,11 +400,11 @@ Setup: Load the new baseline data (progresa_pre_1997.csv) and the follow-up data
 rm(list=ls()) # clean environment
 
 ## Load the datasets
-# progresa_pre_1997 <- read_csv() insert your filepath etc
-# progresa_post_1999 <- read_csv()
+progresa_pre_1997 <- read_csv(here("data", "progresa_pre_1997.csv"))
+progresa_post_1999 <- read_csv(here("data", "progresa_post_1999.csv"))
 
 ## Append post to pre dataset 
-#progresa <- rbind(progresa_pre_1997, progresa_post_1999)
+progresa <- rbind(progresa_pre_1997, progresa_post_1999)
 
 ```
 a) Estimate a first-difference (FD) regression manually, interpret the results briefly (size of coefficient and precision!)
@@ -414,25 +414,54 @@ a) Estimate a first-difference (FD) regression manually, interpret the results b
 ### Code included to help get you started
 ## i. Sort the panel data in the order in which you want to take differences, i.e. by household and time.
 
-## Create first differences of variables
-# progresa <- progresa %>% 
-#   arrange(hhid, year) %>% 
-#   group_by(hhid)
 
-## ii. Calculate the first difference using the lag function from the dplyr package.
-#     mutate(vani_fd = vani - dplyr::lag(vani)) 
+## Create first differences of variables
+progresa <- progresa %>% 
+  arrange(hhid, year) %>% 
+  group_by(hhid) %>% # WHY NOT GROUP BY YEAR AS WELL
+  
+  ## ii. Calculate the first difference using the lag function from the dplyr package.
+  mutate(vani_fd = vani - dplyr::lag(vani)) 
 
 ## iii. Estimate manual first-difference regression (Estimate the regression using the newly created variables.)
-# fd_manual <- lm(vani_fd ~ ...)
+fd_manual <- lm(vani_fd ~ treatment, data = progresa)
+
+summary_reg <- summary(fd_manual)
+
+# Extracting the coefficients table, which is usually the main point of interest
+coefficients_df <- summary_reg$coefficients
+
+# Converting the matrix to a data frame if needed (it might already be a matrix)
+coefficients_df <- as.data.frame(coefficients_df)
+
+# Using kable to format the coefficients table
+kable(coefficients_df, caption = "First-difference regression")
 
 ```
+
+
+
 ## Fixed Effects Estimates _(2 pts: 1 pts estimate, 1.5 interpretation)_
 b) Now also run a fixed effects (FE or ‘within’) regression and compare the results. Interpret the estimated treatment effects briefly (size of coefficient and precision!)
 
 ```{r, include=TRUE}
 ## Fixed Effects Regression
 
+# ESTIMATE THE BASIC 'WITHIN' FIXED EFFECTS REGRESSION
+# NOTE "plm" ONLY PRODUCES CLUSTER-ROBUST STANDARD ERRORS
+
+
+progresa <- progresa[!is.na(progresa$treatment), ]
+progresa <- progresa[!is.na(progresa$vani), ]
+progresa <- progresa[!is.na(progresa$hhid), ]
+progresa <- progresa[!is.na(progresa$year), ]
+
+within_reg <- plm(vani ~ treatment, index = c("hhid", "year"), model = c("within"), effect = c("twoways"), data = progresa)
+# order of specifications?
+
 ## Present Regression Results
+summary(within_reg)
+
 ```
 
 ## First Difference and Fixed Effects and Omitted Variable Problems _(1 pts)_

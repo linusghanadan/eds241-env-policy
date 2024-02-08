@@ -131,19 +131,19 @@ for (i in names(covariate_binary)) {
 }
 
 # Identifying continuous variables for t-tests
-for (u in names(covariate_continuous)) {
-  # Dynamically creating the formula for the t-test
-  formula <- as.formula(paste(u, "~ tobacco"))
-  
-  # Performing the t-test
-  t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
-  
-  # Storing the tidy results of the t-test in the data frame
-  t_test_result_tidy <- broom::tidy(t_test_result)
-  t_test_result_tidy$Variable <- u
-  t_test_results <- rbind(t_test_results, t_test_result_tidy)
-  
-}
+# for (u in names(covariate_continuous)) {
+#   # Dynamically creating the formula for the t-test
+#   formula <- as.formula(paste(u, "~ tobacco"))
+#   
+#   # Performing the t-test
+#   t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
+#   
+#   # Storing the tidy results of the t-test in the data frame
+#   t_test_result_tidy <- broom::tidy(t_test_result)
+#   t_test_result_tidy$Variable <- u
+#   t_test_results <- rbind(t_test_results, t_test_result_tidy)
+#   
+# }
 
 ```
 

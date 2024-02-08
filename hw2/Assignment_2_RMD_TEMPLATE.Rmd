@@ -83,33 +83,28 @@ a) What is the mean difference in birth weight of infants with smoking and non-s
 
 
 ```{r , include=TRUE}
-## Calculate mean difference. Remember to calculate a measure of statistical significance
+#### Calculate mean difference
 ATE <- mean(smoking_df$birthwgt[smoking_df$tobacco == 1]) - mean(smoking_df$birthwgt[smoking_df$tobacco == 0])
 ATE
 
+#### Calculate statistical significance for mean difference calculation
 t.test(smoking_df$birthwgt[smoking_df$tobacco == 1], smoking_df$birthwgt[smoking_df$tobacco == 0])
 
-## For continuous variables you can use the t-test
-#t.test()
+#### Covariate Calculations and Tables (feel free to use code from Assignment 1 key)
 
-## For binary variables you should use the proportions test
-#prop.test()
-
-## Covariate Calculations and Tables (feel free to use code from Assignment 1 key)
-
-# Selecting binary and continuous variables from the dataset
+# Selecting binary and continuous variables from data set
 covariate_binary <- smoking_df %>%
   select(tobacco, anemia, diabete, alcohol, mblack, first)
 covariate_continuous <- smoking_df %>%
   select(tobacco, mage, meduc)
 
-
-# Initialize empty data frames to store results of tests
+# Initialize empty data frames to store test results
 prop_test_results <- data.frame()
 t_test_results <- data.frame()
 
 # Identifying binary variables for proportion tests
 for (i in names(covariate_binary)) {
+  
   # Splitting the data into treated and untreated groups for the current variable
   treated <- covariate_binary %>%
     filter(tobacco == 1) %>%
@@ -123,30 +118,42 @@ for (i in names(covariate_binary)) {
                                 n = c(length(treated), length(untreated)),
                                 correct = FALSE)
   
-  # Storing the tidy results of the proportion test in the data frame
+  # Storing the tidy results of the proportion test in data frame
   prop_test_result_tidy <- broom::tidy(prop_test_result)
   prop_test_result_tidy$Variable <- i
   prop_test_results <- rbind(prop_test_results, prop_test_result_tidy)
   
 }
 
-# Identifying continuous variables for t-tests
-# for (u in names(covariate_continuous)) {
-#   # Dynamically creating the formula for the t-test
-#   formula <- as.formula(paste(u, "~ tobacco"))
-#   
-#   # Performing the t-test
-#   t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
-#   
-#   # Storing the tidy results of the t-test in the data frame
-#   t_test_result_tidy <- broom::tidy(t_test_result)
-#   t_test_result_tidy$Variable <- u
-#   t_test_results <- rbind(t_test_results, t_test_result_tidy)
-#   
-# }
+# Exclude 'tobacco' from the list of variables to process
+variable_names <- setdiff(names(covariate_continuous), "tobacco")
+
+for (u in variable_names) {
+  # Dynamically creating the formula for the t-test
+  formula <- as.formula(paste(u, "~ tobacco"))
+  
+  # Performing the t-test
+  t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
+  
+  # Storing the tidy results of the t-test in the data frame
+  t_test_result_tidy <- broom::tidy(t_test_result)
+  t_test_result_tidy$Variable <- u
+  t_test_results <- rbind(t_test_results, t_test_result_tidy)
+  
+}
+
+# Combine the results into one data frame
+combined_results <- rbind(prop_test_results, t_test_results)
+
+# Create the kable table
+kable_table <- kable(combined_results, format = "html", caption = "Combined Results of Proportion and T-Tests") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# Print the table to view it in an R Markdown document or R Notebook
+kable_table
+
 
 ```
-
 
 
 ## ATE and Covariate Balance _(3 pts)_
@@ -158,51 +165,25 @@ b) Assume that maternal smoking is randomly assigned conditional on the observab
 
 ```{r , include=TRUE}
 
-# ATE Regression univariate
+#### ATE Regression univariate
 model_1 <- lm(birthwgt ~ tobacco, data = smoking_df)
 
 
-# ATE with covariates
+#### ATE with covariates
 model_2 <- lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df)
 
+#### Present Regression Results
 
-# Present Regression Results
-# reg_results <- stargazer(model_1, model_2,
-#                          type = "latex", ci=FALSE, no.space = TRUE,
-#                          header = FALSE, omit = c("Constant"), omit.stat = c("adj.rsq","ser", "f"),
-#                          covariate.labels = c("tobacco", "anemia", "diabete", "alcohol", "mblack", "first", "mage", "meduc"),
-#                          dep.var.labels = c("birthwgt"), dep.var.caption = c(""),
-#                          title = "Average Treatment (tobacco) Effect on birthwgt", table.placement = "H")
-
-
-# Covariate balance
-
-# --- Computing	indices	of covariate	imbalance	before	matching
-# you will see that the tests reject the balanced distribution across all 
-# variables simultaneously (chi-square test) and for most variables separately
-# (std.diffs test) 
-xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
-         data = smoking_df, report = c("std.diffs", "chisquare.test", "p.values")) %>% 
-  kbl(caption = "Indices of covariate imbalance (before matching)") %>% 
-  kable_classic(full_width = FALSE)
-
-
-```
-
-```{r}
-# Assuming model_1 and model_2 are your model objects
+# Store coefficients from model_1 and model_2
 coefficients_model_1 <- model_1$coefficients
 coefficients_model_2 <- model_2$coefficients
 
-# Create a vector for model_1 coefficients aligned with model_2's coefficients
-# Initialize a named vector with names from model_2 and all values set to NA
+# Create a vector for model_1 coefficients aligned with model_2 coefficients
 aligned_model_1 <- setNames(rep(NA, length(coefficients_model_2)), names(coefficients_model_2))
 
-# Fill aligned_model_1 with coefficients_model_1 values where names match
+# Fill aligned_model_1 with coefficients_model_1 values where names match and combine into one data frame
 names_in_both <- names(coefficients_model_1) %in% names(coefficients_model_2)
 aligned_model_1[names(coefficients_model_1)[names_in_both]] <- coefficients_model_1[names_in_both]
-
-# Combine into a data frame
 combined_df <- data.frame(model_1 = aligned_model_1, model_2 = coefficients_model_2)
 
 # Extract standard errors from each model summary
@@ -214,16 +195,22 @@ aligned_se_model_1 <- setNames(rep(NA, length(se_model_2)), names(se_model_2))
 names_in_model_1 <- names(se_model_1) %in% names(se_model_2)
 aligned_se_model_1[names(se_model_1)[names_in_model_1]] <- se_model_1[names_in_model_1]
 
-# Append the SEs as new rows in the data frame
-# Note: This assumes your data frame's row names are the coefficient names.
-# If not, you may need to adjust how you append this information.
+# Append the SEs as new rows in the data frame and reorder columns
 combined_df_with_se <- cbind(combined_df, 
                              SE_model_1 = aligned_se_model_1, 
                              SE_model_2 = se_model_2) %>% 
   select(model_1, SE_model_1, model_2, SE_model_2)
 
-# Show the updated data frame with standard errors
-print(combined_df_with_se)
+# Present table using kable package
+kable(combined_df_with_se, caption = "ATE regression without (model 1) and with (model 2) covariates")
+
+#### Compute indices of covariate imbalance (pre-matching)
+xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
+         data = smoking_df, report = c("std.diffs", "chisquare.test", "p.values")) %>% 
+  kbl(caption = "Indices of covariate imbalance (before matching)") %>% 
+  kable_classic(full_width = FALSE)
+
+
 ```
 
 

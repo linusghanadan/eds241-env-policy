@@ -125,42 +125,50 @@ for (i in names(covariate_binary)) {
   
 }
 
-# Exclude 'tobacco' from the list of variables to process
+# Exclude tobacco from the list of variables to process
 variable_names <- setdiff(names(covariate_continuous), "tobacco")
 
-for (u in variable_names) {
+for (i in variable_names) {
   # Dynamically creating the formula for the t-test
-  formula <- as.formula(paste(u, "~ tobacco"))
+  formula <- as.formula(paste(i, "~ tobacco"))
   
   # Performing the t-test
   t_test_result <- t.test(formula, data = covariate_continuous, na.action = na.omit)
   
   # Storing the tidy results of the t-test in the data frame
   t_test_result_tidy <- broom::tidy(t_test_result)
-  t_test_result_tidy$Variable <- u
+  t_test_result_tidy$Variable <- i
   t_test_results <- rbind(t_test_results, t_test_result_tidy)
   
 }
 
-# Combine the results into one data frame
-combined_results <- rbind(prop_test_results, t_test_results)
+#### Present results
 
-# Create the kable table
-kable_table <- kable(combined_results, format = "html", caption = "Combined Results of Proportion and T-Tests") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+# Combining the results of proportion and t-tests into a single data frame
+combined_results <- bind_rows(
+prop_test_results %>% select(Variable, estimate1, estimate2, p.value), t_test_results %>% select(Variable, estimate1, estimate2, p.value)
+)
 
-# Print the table to view it in an R Markdown document or R Notebook
-kable_table
+# Creating a table for output using kable
+combined_results_table <- kable(combined_results, col.names = c("Variable",
+                                                                "Proportion or Mean Control",
+                                                                "Proportion or Mean Treated", "P-Value"),
+                                caption = "Treated and Untreated Pre-treatment Proportion and T-Test Results")
 
+# Displaying the table
+combined_results_table
 
 ```
+
+[The mean difference in birth weight of infants with smoking mothers, compared to non-smoking mothers, is -244.5 grams, and our 95% confidence interval is from -252.7 grams to -236.4 grams. Our calculated mean difference is also the ATE under the assumption that mothers were randomly assigned to the smoking and non-smoking groups.]{style="color:navy;"}
+
+[With the exception of the diabetes covariate, the differences in the mean proportions/values of all other covariates observed in smokers and non-smokers were each statistically significant at alpha level of 0.01. This provides empirical evidence against the assumption that randomization occurred because our result shows that the two groups (smoking mothers and non-smoking mothers) are systematically different from one another for all covariates looked at in this study except diabetes.]{style="color:navy;"}
+
+[To help us further assess the randomization assumption, we could compute the standard difference between the two groups (smoking mothers and non-smoking mothers) for each covariate variable and see how many of these standard differences were significantly different than zero based on p-value. We could also run a chi-squared test to assess whether differences across all covariates were altogether significantly different than zero based on p-value.]{style="color:navy;"}
 
 
 ## ATE and Covariate Balance _(3 pts)_
 b) Assume that maternal smoking is randomly assigned conditional on the observable covariates listed above. Estimate the effect of maternal smoking on birth weight using an OLS regression with NO linear controls for the covariates [0.5 pts]. Perform the same estimate including the control variables [0.5 pts]. Next, compute indices of covariate imbalance between the treated and non-treated regarding these covariates (see example file from class). Present your results in a table [1 pts]. What do you find and what does it say regarding whether the assumption you mentioned responding to a) is fulfilled? [1 pts]
-
-
-
 
 
 ```{r , include=TRUE}
@@ -207,77 +215,72 @@ kable(combined_df_with_se, caption = "ATE regression without (model 1) and with 
 #### Compute indices of covariate imbalance (pre-matching)
 xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc,
          data = smoking_df, report = c("std.diffs", "chisquare.test", "p.values")) %>% 
-  kbl(caption = "Indices of covariate imbalance (before matching)") %>% 
+  kbl(caption = "Indices of covariate imbalance (before matching)") %>%  # Generate table
   kable_classic(full_width = FALSE)
 
 
 ```
 
+[Using an OLS regression with no linear controls for the covariates, we estimate the effect of maternal smoking on birth weight to be -244.5 grams. Using an OLS regression with linear controls for the covariates, we estimate the effect of maternal smoking on birth weight to be -228.1 grams.]{style="color:navy;"}
 
+[When we calculate the standard differences between the two groups (smoking mothers and non-smoking mothers) for each covariate variable, we find that the standard differences for each of the seven covariate variables are significantly different than zero at an alpha of 0.01. When we run the chi-squared test, we reject the null hypothesis that the difference between all covariates altogether for the two groups was equal to zero at an alpha of 0.01. The standard differences and the chi-squared test provide further empirical evidence against the assumption that randomization occurred because our results show that the two groups (smoking mothers and non-smoking mothers) are systematically different from one another in terms of the covariates.]{style="color:navy;"}
 
 ## Propensity Score Estimation _(3 pts)_
 c) Next, estimate propensity scores (i.e. probability of being treated) for the sample, using the provided covariates. Create a regression table reporting the results of the regression and discuss what the covariate coefficients indicate and interpret one coefficient [1.5 pts]. Create histograms of the propensity scores comparing the distributions of propensity scores for smokers ('treated') and non-smokers ('control'), discuss the overlap and what it means [1.5 pts].
 
 ```{r , include=TRUE}
 
-## Propensity Scores
+#### Propensity Scores
 
-
-# --- Estimation of propensity	scores with the glm function
-# choosing family = "binomial" will pick a "logit" (or logistic) model
-ps <- glm(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc,
+# Estimation of propensity scores with the glm function and logit model
+ps_reg <- glm(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc,
           data = smoking_df, family = binomial())
 
+#### Present regression result
 
-# --- Attach	the	predicted	propensity	score	to	the	datafile
-# Note: the predictions from a logit model are probabilities
-# In this case probabilities to be treated given the covariates chosen, 
-# i.e., the propensity scores
+# Extracting the coefficients table
+summary_reg <- summary(ps_reg)
+coefficients_df <- summary_reg$coefficients
+
+# Using kable to format the table
+kable(coefficients_df, caption = "Propensity scores before matching")
+
+#### PS Histogram Unmatched 
+
+# Attach the predicted propensity score	to the data frame
 smoking_df$psvalue <- predict(ps, type	= "response")
 
-
-## PS Histogram Unmatched 
-
-# --- Drawing back to back histograms for propensity scores for treated and 
-# non-treated before matching
+# Drawing back to back histograms for propensity scores for treated and non-treated before matching
 histbackback(split(smoking_df$psvalue, smoking_df$tobacco),
              main = "Propensity score before matching", xlab=c("control",	"treatment"))
 
-
 ```
+
+
+
 
 ## Matching Balance _(3 pts)_
 (d) Next, match treated/control mothers using your estimated propensity scores and nearest neighbor matching. Compare the balancing of pretreatment characteristics (covariates) between treated and non-treated units in the original dataset (from c) with the matched dataset (think about comparing histograms/regressions) [2 pts]. Make sure to report and discuss the balance statistics [1 pts].
 
 ```{r , include=TRUE}
 
-## Nearest-neighbor Matching
+#### Nearest-neighbor Matching
 
-# --- Match	using	nearest-neighbor approach, i.e. treated units are assigned the 
-# non-treated unit with the closest propensity score as match 
-# You will see that matches are found for all 185 treated units (guaranteed
-# with the nearest-neighbor approach)
+# Match using	nearest-neighbor approach (treated units are assigned the non-treated unit with the closest propensity score as match)
 nn_matching <- matchit(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, method = "nearest", ratio = 1)
 match_data = match.data(nn_matching)
 
+#### Covariate Imbalance post matching: 
 
-## Covariate Imbalance post matching: 
-
-# --- Computing	indices	of covariate	imbalance	after	matching
-# same command as above but using the matched data now
-# what you will see is that matching by propensity scores balances
-# the covariates between treated and non-treated that were used in the
-# estimation of the propensity scores
+# Computing	indices	of covariate imbalance after matching
 xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df,
          report = c("std.diffs", "chisquare.test", "p.values")) %>% 
-  kbl(caption = "Indices of covariate imbalance (after matching)") %>% 
+  kbl(caption = "Indices of covariate imbalance (after matching)") %>% # Generate table
   kable_classic(full_width = FALSE)
 
+#### Histogram of PS after matching
 
-## Histogram of PS after matching
-
-# Drawing back to back histograms for propensity scores for treated and 
-# non-treated after matching
+# Drawing back to back histograms for propensity scores for treated and non-treated after matching
 histbackback(split(match_data$psvalue, match_data$tobacco),
              main= "Propensity score after matching", xlab=c("control",	"treatment"))
 ```
@@ -287,23 +290,17 @@ histbackback(split(match_data$psvalue, match_data$tobacco),
 
 ```{r , include=TRUE}
 
-# --- Treatment effect estimation using average outcome difference of matched pairs
-# do this with for loop but likely more elegant approaches are possible
-# note that equal entries in "subclass" of match.data defines the match
-# this loop sums up the differences of outcomes between matches and then 
-# divides by NT to derive the mean difference as the ATE estimate
+#### Treatment effect estimation using average outcome difference of matched pairs
 
+# Calculate sum of the differences of outcomes between matches
 sumdiff_data <- match_data %>%
   group_by(subclass) %>%
   mutate(diff = birthwgt[tobacco==1] - birthwgt[tobacco==0])
-
 sumdiff <- sum(sumdiff_data$diff)/2
 
-# 1 / number treated * sumdiff
-ATT_nn = 1/sum(match_data$tobacco) * sumdiff
+# Divide sum of the difference by the number treated to generate ATT estimate
+ATT_nn = sumdiff / sum(match_data$tobacco)
 ATT_nn
-
-
 
 # NOTE: This is an ATT estimate, NOT an ATE. Why? Because we picked nearest 
 # neighbor matches only for the treated. So we defined a counterfactual only for the
@@ -318,48 +315,26 @@ ATT_nn
 f) Last, use the original dataset and perform the weighted least squares estimation of the ATE using the propensity scores (including controls). Report and interpret your results, here include both size and precision of estimate in reporting and interpretation.
 
 ```{r , include=TRUE}
-## Weighted least Squares (WLS) estimator Preparation
 
-# --- estimate treatment effect with Weighted least Squares (WLS) estimator
-# Both the nearest neighbor matching estimator and the IPW estimattor do not
-# easily allow to calculated standard errors. They also do not allow to take
-# controls into consideration. Therefore the following weighted least squares
-# estimator has advantages
+#### Weighted least Squares (WLS) estimator Preparation
 
-# calculation of the weights - see slide 25 of lecture 5
+# calculation of the weights (see slide 25 of lecture 5)
 PS <- smoking_df$psvalue
 D <- smoking_df$tobacco
 
 smoking_df$wgt = (D/PS + (1-D)/(1-PS))
 
-# doing WLS without controls reproduces the IPW estimator
-# reg_wls	<-lm(re78	~ treat,
-#              data = lalonde, weights = wgt)
-# summary(reg_wls)
-
-
-## Weighted least Squares (WLS) Estimates
-
-# With controls. Strongly advisable as outcomes depend on controls and including
-# them allows to estimate the ATE with more precision
-# --> the treatment effect has a lower standard error. Don't get confused by the
-# lack of statistical significance compared to the case without controls. It is
-# because the estimated treatment effect is smaller
+#### Weighted least Squares (WLS) Estimates
 reg_wls_c	<-lm(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, weights = wgt)
 
 
-## Present Results
+#### Present Results
 
-# Assuming reg_wls_c is your linear model object
+# Extracting the coefficients table
 summary_reg <- summary(reg_wls_c)
-
-# Extracting the coefficients table, which is usually the main point of interest
 coefficients_df <- summary_reg$coefficients
 
-# Converting the matrix to a data frame if needed (it might already be a matrix)
-coefficients_df <- as.data.frame(coefficients_df)
-
-# Using kable to format the coefficients table
+# Using kable to format the table
 kable(coefficients_df, caption = "WLS estimates")
 
 
@@ -372,6 +347,7 @@ kable(coefficients_df, caption = "WLS estimates")
 ## Differences in Estimates _(1 pts)_ 
 g) Explain why it was to be expected given your analysis above that there is a difference between your estimates in e) and f)? 
 
+f allows for standard errors
 
 
 \newpage
@@ -398,30 +374,25 @@ a) Estimate a first-difference (FD) regression manually, interpret the results b
 \indent *Note: Calculate the difference between pre- and post- program outcomes for each family. To do that, follow these steps and the code given in the R-template:
 
 ```{r, include=TRUE}
-### Code included to help get you started
-## i. Sort the panel data in the order in which you want to take differences, i.e. by household and time.
 
+#### Create first differences of variables
 
-## Create first differences of variables
+# i. Sort the panel data in the order in which you want to take differences, i.e. by household and time.
 progresa <- progresa %>% 
-  arrange(hhid, year) %>% 
-  group_by(hhid) %>% # WHY NOT GROUP BY YEAR AS WELL
+  arrange(hhid, year) %>%
+  group_by(hhid) %>%
   
-  ## ii. Calculate the first difference using the lag function from the dplyr package.
+  # ii. Calculate the first difference using the lag function from the dplyr package.
   mutate(vani_fd = vani - dplyr::lag(vani)) 
 
-## iii. Estimate manual first-difference regression (Estimate the regression using the newly created variables.)
+# iii. Estimate manual first-difference regression (Estimate the regression using the newly created variables.)
 fd_manual <- lm(vani_fd ~ treatment, data = progresa)
 
+# Extracting the coefficients table
 summary_reg <- summary(fd_manual)
-
-# Extracting the coefficients table, which is usually the main point of interest
 coefficients_df <- summary_reg$coefficients
 
-# Converting the matrix to a data frame if needed (it might already be a matrix)
-coefficients_df <- as.data.frame(coefficients_df)
-
-# Using kable to format the coefficients table
+# Generate kable table
 kable(coefficients_df, caption = "First-difference regression")
 
 ```
@@ -432,22 +403,19 @@ kable(coefficients_df, caption = "First-difference regression")
 b) Now also run a fixed effects (FE or ‘within’) regression and compare the results. Interpret the estimated treatment effects briefly (size of coefficient and precision!)
 
 ```{r, include=TRUE}
-## Fixed Effects Regression
-
+#### Calculate Fixed Effects Regression
 # ESTIMATE THE BASIC 'WITHIN' FIXED EFFECTS REGRESSION
 # NOTE "plm" ONLY PRODUCES CLUSTER-ROBUST STANDARD ERRORS
+within_reg <- plm(vani ~ treatment, index = c("state", "year"), model = c("within"), effect = c("twoways"), data = progresa)
 
+#### Present Regression Results
 
-progresa <- progresa[!is.na(progresa$treatment), ]
-progresa <- progresa[!is.na(progresa$vani), ]
-progresa <- progresa[!is.na(progresa$hhid), ]
-progresa <- progresa[!is.na(progresa$year), ]
+# Extracting the coefficients table
+summary_reg <- summary(within_reg)
+coefficients_df <- summary_reg$coefficients
 
-within_reg <- plm(vani ~ treatment, index = c("hhid", "year"), model = c("within"), effect = c("twoways"), data = progresa)
-# order of specifications?
-
-## Present Regression Results
-summary(within_reg)
+# Generate kable table
+kable(coefficients_df, caption = "FE estimates")
 
 ```
 

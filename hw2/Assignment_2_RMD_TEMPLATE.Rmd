@@ -248,7 +248,7 @@ kable(coefficients_df, caption = "Propensity scores before matching")
 #### PS Histogram Unmatched 
 
 # Attach the predicted propensity score	to the data frame
-smoking_df$psvalue <- predict(ps, type	= "response")
+smoking_df$psvalue <- predict(ps_reg, type	= "response")
 
 # Drawing back to back histograms for propensity scores for treated and non-treated before matching
 histbackback(split(smoking_df$psvalue, smoking_df$tobacco),
@@ -256,7 +256,11 @@ histbackback(split(smoking_df$psvalue, smoking_df$tobacco),
 
 ```
 
+and discuss what the covariate coefficients indicate and interpret one coefficient [1.5 pts]. Create histograms of the propensity scores comparing the distributions of propensity scores for smokers ('treated') and non-smokers ('control'), discuss the overlap and what it means [1.5 pts].
 
+[The covariate coefficients indicate the effect of a one-unit change in the covariate variable on the log-odds of a unit being in the treatment group (i.e., a newborn experiencing maternal smoking). For example, our covariate coefficient for alcohol means that a mother drinking alcohol while pregnant was associated with a doubling in the log-odds of a mother smoking tobacco while pregnant. This is also the same as saying that a mother drinking while pregnant is associated with a 69% (natural logarithm of 2) increase in the odds that she smoked tobacco while pregnant. Overall, our covariate coefficients here indicate that a mother being anemic, having diabetes, and drinking alcohol while pregnant were associated with an increase in the log-odds of the mother smoking tobacco while pregnant (all significant at alpha of 0.05). Furthermore, they indicate that a mother being black or having her first child were associated with a decrease in the log-odds of the mother smoking tobacco while pregnant (all significant at alpha of 0.01). Lastly, the coefficients also indicate that a one-year increase in the mother's age or education were associated with a decrease in the log-odds of the mother smoking tobacco while pregnant (all significant at alpha of 0.01).]{style="color:navy;"}
+
+[Our histogram shows the assigned propensity scores (i.e., calculated probability of a newborn experiencing maternal smoking based on covariates) on the y-axis and the count of units (newborns) in each group (smoking and non-smoking mothers) with that propensity score on the x-axis. For the treatment (maternal smoking) group, the mode propensity score is about 0.3, and the distribution is approximately normal. For the control group (no maternal smoking), the distribution is bimodal, with modes at propensity scores of about 0.3 and 0.1, and is overall more skewed right (longer tail for higher propensity values) compared to the treatment group. The overlap in the distributions demonstrate that at just about every bin of propensity score values (except the very highest bins), there was a mix of newborns that had non-smoking mothers and smoking mothers.]{style="color:navy;"}
 
 
 ## Matching Balance _(3 pts)_
@@ -273,7 +277,7 @@ match_data = match.data(nn_matching)
 #### Covariate Imbalance post matching: 
 
 # Computing	indices	of covariate imbalance after matching
-xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df,
+xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = match_data,
          report = c("std.diffs", "chisquare.test", "p.values")) %>% 
   kbl(caption = "Indices of covariate imbalance (after matching)") %>% # Generate table
   kable_classic(full_width = FALSE)
@@ -284,6 +288,13 @@ xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, d
 histbackback(split(match_data$psvalue, match_data$tobacco),
              main= "Propensity score after matching", xlab=c("control",	"treatment"))
 ```
+(d) Next, match treated/control mothers using your estimated propensity scores and nearest neighbor matching. Compare the balancing of pretreatment characteristics (covariates) between treated and non-treated units in the original dataset (from c) with the matched dataset (think about comparing histograms/regressions) [2 pts]. Make sure to report and discuss the balance statistics [1 pts].
+
+[After applying nearest neighbor matching (i.e., assigning treated units [newborns that experienced maternal smoking] with the non-treated unit [newborn that did not experience maternal smoking] with the closest propensity score as a match) for all treated units (newborns that experienced maternal smoking), 
+
+to treated units are assigned the non-treated unit with the closest propensity score as match)
+
+
 
 ## ATE with Nearest Neighbor _(3 pts)_
 (e) Estimate the ATT using the matched dataset. Report and interpret your result (Note: no standard error or significance test is required here)

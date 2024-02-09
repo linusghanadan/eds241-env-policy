@@ -223,7 +223,7 @@ xBalance(birthwgt ~ tobacco + anemia + diabete + alcohol + mblack + first + mage
 
 [Using an OLS regression with no linear controls for the covariates, we estimate the effect of maternal smoking on birth weight to be -244.5 grams. Using an OLS regression with linear controls for the covariates, we estimate the effect of maternal smoking on birth weight to be -228.1 grams.]{style="color:navy;"}
 
-[When we calculate the standard differences between the two groups (smoking mothers and non-smoking mothers) for each covariate variable, we find that the standard differences for each of the seven covariate variables are significantly different than zero at an alpha of 0.01. When we run the chi-squared test, we reject the null hypothesis that the difference between all covariates altogether for the two groups was equal to zero at an alpha of 0.01. The standard differences and the chi-squared test provide further empirical evidence against the assumption that randomization occurred because our results show that the two groups (smoking mothers and non-smoking mothers) are systematically different from one another in terms of the covariates.]{style="color:navy;"}
+[When we calculate the standard differences between the two groups (smoking mothers and non-smoking mothers) for each covariate variable, we find that the standard differences for each of the seven covariate variables are significantly different than zero at an alpha of 0.01. When we run the chi-squared test, we reject the null hypothesis that the difference between all covariates altogether for the two groups (smoking mothers and non-smoking mothers) was equal to zero at an alpha of 0.01. The standard differences and the chi-squared test provide further empirical evidence against the assumption that randomization occurred because our results show that the two groups (smoking mothers and non-smoking mothers) are systematically different from one another in terms of the covariates.]{style="color:navy;"}
 
 ## Propensity Score Estimation _(3 pts)_
 c) Next, estimate propensity scores (i.e. probability of being treated) for the sample, using the provided covariates. Create a regression table reporting the results of the regression and discuss what the covariate coefficients indicate and interpret one coefficient [1.5 pts]. Create histograms of the propensity scores comparing the distributions of propensity scores for smokers ('treated') and non-smokers ('control'), discuss the overlap and what it means [1.5 pts].
@@ -274,6 +274,7 @@ and discuss what the covariate coefficients indicate and interpret one coefficie
 nn_matching <- matchit(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, data = smoking_df, method = "nearest", ratio = 1)
 match_data = match.data(nn_matching)
 
+
 #### Covariate Imbalance post matching: 
 
 # Computing	indices	of covariate imbalance after matching
@@ -288,12 +289,8 @@ xBalance(tobacco ~ anemia + diabete + alcohol + mblack + first + mage + meduc, d
 histbackback(split(match_data$psvalue, match_data$tobacco),
              main= "Propensity score after matching", xlab=c("control",	"treatment"))
 ```
-(d) Next, match treated/control mothers using your estimated propensity scores and nearest neighbor matching. Compare the balancing of pretreatment characteristics (covariates) between treated and non-treated units in the original dataset (from c) with the matched dataset (think about comparing histograms/regressions) [2 pts]. Make sure to report and discuss the balance statistics [1 pts].
 
-[After applying nearest neighbor matching (i.e., assigning treated units [newborns that experienced maternal smoking] with the non-treated unit [newborn that did not experience maternal smoking] with the closest propensity score as a match) for all treated units (newborns that experienced maternal smoking), 
-
-to treated units are assigned the non-treated unit with the closest propensity score as match)
-
+[After applying nearest neighbor matching for all treated units (newborns that experienced maternal smoking), our histogram looks very even between the two groups (non-smoking and smoking mothers), indicating that the propensity score for an individual newborn no longer seems to a determining factor for which group (non-smoking or smoking mothers) that the newborn was a part of. In our previous histogram, it was clear that newborns assigned lower propensity scores were more likely to be in the control group (have a non-smoking mother). After matching, there is also a much greater balance in the covariates across each of the two groups (smoking and non-smoking mother). Looking at our standard differences for the covariate variables, only drinking alcohol while pregnant and years of mother education still have statistically significant differences between the treatment (smoking mother) and control (non-smoking mother) groups at an alpha level of 0.01. For comparison, in the standard difference tests we ran prior to matching, all covariate variables had statistically significant differences at an alpha level of 0.01. In our chi-squared test, we still reject the null hypothesis that the difference between all covariates altogether for the two groups was equal to zero at an alpha of 0.01, seemingly due to differences that remained in terms of the alcohol use and mother's education covariates.]{style="color:navy;"}
 
 
 ## ATE with Nearest Neighbor _(3 pts)_
@@ -322,6 +319,9 @@ ATT_nn
 
 ```
 
+[Using the matched data, we estimate the average effect on birth weight of maternal smoking to be -222.9 grams for newborns that did experience maternal smoking. This estimated effect size only applies to newborns that did experience maternal smoking because we only defined counterfactuals for these newborns. Thus, our average outcome only demonstrates the effect of maternal smoking on birth weight as it pertains to newborns that experienced maternal smoking.]{style="color:navy;"}
+
+
 ## ATE with WLS Matching _(3 pts)_
 f) Last, use the original dataset and perform the weighted least squares estimation of the ATE using the propensity scores (including controls). Report and interpret your results, here include both size and precision of estimate in reporting and interpretation.
 
@@ -347,18 +347,13 @@ coefficients_df <- summary_reg$coefficients
 
 # Using kable to format the table
 kable(coefficients_df, caption = "WLS estimates")
-
-
-
-
-
-
 ```
+
+[Using the WLS estimator, we estimate the average effect on birth weight of maternal smoking to be -224.9 grams. Our standard error of 3.2 grams indicates that our 95% confidence interval for the effect size is between -231.2 grams and -218.6 grams. This estimated effect size applies to all newborns because we did not remove any newborns from our sample as we did when estimating effect size based on matching. Instead, we weighted each newborn based on how similar their covariates were to the average covariate values, meaning some newborns were weighted more than others but none were completely removed.]{style="color:navy;"}
 
 ## Differences in Estimates _(1 pts)_ 
 g) Explain why it was to be expected given your analysis above that there is a difference between your estimates in e) and f)? 
 
-f allows for standard errors
 
 
 \newpage

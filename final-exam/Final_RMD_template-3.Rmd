@@ -161,7 +161,7 @@ Yes
 ## Propensity Score Estimates
 
 # Estimation of propensity scores with the glm function and logit model
-ps_reg <- glm(itq ~ met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+ps_reg <- glm(itq ~ met1 + met2 + met3 + met4 + met5 + ind_sr + comm_val,
           data = fisheries_df, family = binomial())
 
 # Attach the predicted propensity score	to the data frame
@@ -174,6 +174,7 @@ histbackback(split(fisheries_df$psvalue, fisheries_df$itq),
 
 ```
 
+Remove met6 is correct?
 
 
 ## ATT with Nearest Neighbor Matching _(3 pts: 2 pt estimate, 1 pt interpretation)_
@@ -182,7 +183,7 @@ histbackback(split(fisheries_df$psvalue, fisheries_df$itq),
 ## Nearest Neighbor Matching
 
 # Match using	nearest-neighbor approach (treated units are assigned the non-treated unit with the closest propensity score as match)
-nn_matching <- matchit(itq ~ met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+nn_matching <- matchit(itq ~ met1 + met2 + met3 + met4 + met5 + ind_sr + comm_val,
                        data = fisheries_df, method = "nearest", ratio = 1)
 match_data = match.data(nn_matching)
 
@@ -213,7 +214,7 @@ D <- fisheries_df$itq
 fisheries_df$wgt = (D/PS + (1-D)/(1-PS))
 
 #### Weighted least Squares (WLS) Estimates
-reg_wls	<-lm(coll_share ~ itq + met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+reg_wls	<-lm(coll_share ~ itq + met1 + met2 + met3 + met4 + met5 + ind_sr + comm_val,
                data = fisheries_df, weights = wgt)
 
 ## Estimate ATE
@@ -247,14 +248,18 @@ rm(list=ls()) # clean environment
 
 # Load 1997 and 1999 Progresa datasets
 
+## Load the datasets
+progresa_pre_1997 <- read_csv(here("data", "progresa_pre_1997.csv"))
+progresa_post_1999 <- read_csv(here("data", "progresa_post_1999.csv"))
+
 ####### CODE FIX FOR FINAL ######
 
 ### Append post to pre dataset 
-# progresa_full <- rbind(progresa_pre_1997, progresa_post_1999) # same as original
-#(note, you can keep NAs in the data- they'll be excluded from any estimates etc)
-#progresa_full <- progresa_full %>%
-#  group_by(hhid) %>% filter(n() == 2) %>%
-#  ungroup()
+progresa_full <- rbind(progresa_pre_1997, progresa_post_1999) # same as original (note, you can keep NAs in the data- they'll be excluded from any estimates etc)
+progresa_full <- progresa_full %>%
+ group_by(hhid) %>% filter(n() == 2) %>%
+ ungroup()
+
 # This removes all families lost to attrition, 
 # in other words. Families who were treated/controls in the program, but did not get measured
 # in the second year. This can happen for many reasons with observational data, you often
@@ -267,11 +272,22 @@ rm(progresa_pre_1997, progresa_post_1999) # clean unused data
 (a) Calculate the DiD estimator of the treatment effect (ATE) of the program on the value of animal holdings (vani)  “manually” i.e. based on group mean values without running a regression. Report and interpret the result (Note: no significance test or standard errors is possible, so you do not need to report these values).
 ```{r, include=TRUE}
 
-## Estimate ATE with DiD estimator manually. 
-# You will need to calculate various means to get this estimate
+## Estimate ATE with DiD estimator manually
 
-              
-## Compute the Difference-in-Differences
+# Calculate mean vani for treatment group before the program
+mean_treat_pre <- mean(progresa_full$vani[progresa_full$treatment == 1 & progresa_full$year == 1997], na.rm = TRUE)
+
+# Calculate mean vani for treatment group after the program
+mean_treat_post <- mean(progresa_full$vani[progresa_full$treatment == 1 & progresa_full$year == 1999], na.rm = TRUE)
+
+# Calculate mean vani for control group before the program
+mean_control_pre <- mean(progresa_full$vani[progresa_full$treatment == 0 & progresa_full$year == 1997], na.rm = TRUE)
+
+# Calculate mean vani for control group after the program
+mean_control_post <- mean(progresa_full$vani[progresa_full$treatment == 0 & progresa_full$year == 1999], na.rm = TRUE)
+
+# DiD estimator
+(mean_treat_post - mean_treat_pre) - (mean_control_post - mean_control_pre)
 
 ```
 
@@ -283,11 +299,18 @@ rm(progresa_pre_1997, progresa_post_1999) # clean unused data
 ```{r, include=TRUE}
 
 ## Create a new data frame for OLS regression
+# Assuming progresa_full is your dataset
+progresa_full$treat <- ifelse(progresa_full$treatment == 1, 1, 0)
+progresa_full$post <- ifelse(progresa_full$year == 1999, 1, 0)
+progresa_full$interaction <- progresa_full$treat * progresa_full$post
 
 ## Run the OLS regression w/dummies
+# OLS regression
+model <- lm(vani ~ treat + post + interaction, data = progresa_full)
+
 
 ## Report OLS Model results Print the summary of the OLS model
-
+summary(model)
 
 ```
 

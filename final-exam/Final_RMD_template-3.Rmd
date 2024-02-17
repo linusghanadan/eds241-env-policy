@@ -1,0 +1,321 @@
+---
+title: "EDS241 final exam"
+author: "Linus Ghanadan"
+date: "2-17-24"
+output: 
+  html_document:
+    toc: false
+    number_sections: yes
+header-includes:
+  \setlength{\parindent}{1em}
+  \usepackage{float}
+  \renewcommand{\thesubsection}{Question (\alph{subsection})}
+--- 
+
+Make sure to read through the setup in markdown. Remember to write out interpretations and report your results in writing/ table/plot forms.
+
+``` {r setup, echo = FALSE, message = FALSE, warning = FALSE}
+#Clean Environment
+rm(list=ls())
+
+# Setup your coding process in a way that works for you. 
+# Ideally use projects to organize your scripts and outputs. 
+# You all probably know more about this than us! 
+# For this project, I would create a project with all your data and scripts. 
+# I often store data on servers rather than my computer which is why I use the code you see below.
+
+# I set an extension to retrieve data from a particular place (Google Drive/servers etc) 
+# and projects to organize my scripts and outputs on my computer/github.
+
+# here I am setting a path to where I stored the data for this assignment
+# data_wd <- "/Users/elliottfinn/Library/CloudStorage/GoogleDrive-elliottfinn@ucsb.edu/Shared drives/EDS241/Assignments/Assignment 2" 
+
+# Example of how I use this Data Working Directory:
+# data <- read_csv(paste0(data_wd,"/FILE_NAME.csv")) 
+# This helps me download/manage my data from different places.
+
+# set default chunk options
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3, 
+                      echo = TRUE, message = FALSE, warning = FALSE)
+
+# load packages
+packages=c(
+  # Necessary for Assignment 2
+  "Match","plm", "tidyverse", "MatchIt", "RItools", "Hmisc", "lmtest", "estimatr",
+  
+  # You decide what works for you, these are the packages I use to display results 
+  # they may not be the ones you use.
+  "gridExtra", "stargazer", "kableExtra", 
+  "purrr", "knitr", "broom", "here",
+  
+  # Some Potentially useful packages from earlier examples
+           "stargazer", "here","stringr", "janitor", 
+           "cowplot", "ggplot2", "tinytex", "datasets", "tibble") # Used for Mock assignment
+
+for (i in packages) {
+  if (require(i,character.only=TRUE)==FALSE) {
+    install.packages(i,repos='http://cran.us.r-project.org')
+  }
+  else {
+    require(i,character.only=TRUE)
+  }
+}
+
+# Disable scientific notation if you want
+options(scipen=999)
+
+```
+
+# Part 1: RCTs, treatment ignorability (selection on observables), propensity scores _(15 points total)_
+
+**Setup**
+
+This exercise is inspired by Costello et al. 2008 article in science “Can Catch Shares Prevent Fisheries Collapse”, which we also discussed in class (lecture 5). “Inspired” means that the data final_fisheries_data.csv are synthetically generated to simplify things for our purposes. It contains the variables on 11,135 fisheries (only cross sectional, no time observations): These fisheries were either regulated by an Individual Transferable Quota (ITQ) for all years between 1990 and 2012 or in none of those years. Variables in the dataset include:
+
+**The outcome and treatment variables are:**
+
+\indent COLL_SHARE = share of years a fishery is collapsed between 1990 and 2012 (collapse defined as harvest being more than 10% below maximum recorded harvest).
+
+\indent ITQ = dummy variable indicating ‘treatment’ with an ITQ (equal to 1 if the fishery has been regulated by an ITQ and 0 otherwise). 
+
+**The control variables are:**
+
+\indent MET1, MET2, ….MET6 = Dummy variables indicating to which Marine Ecosystem Type (MET) the fishery belongs to (coral reefs, kelp forests, seagrass meadows, open ocean, deep sea, mangrove forests). This type does not change over the relevant time period and does not depend on human influence.
+
+\indent IND_SR = Index of species richness in 1980 with values between 0 and 100 indicating the biodiversity with respect to species in the fishery. Bounds of 0 and 100 are the lowest and highest observed values of species diversity across all fisheries in 1980, respectively.
+
+\indent COMM_VAL = Commercial value of fisheries in 1980 in million US-$
+
+The basic question of interest is “What is the average treatment effect of implementing an ITQ in the time period from 1990 to 2012 on the share of years with a collapse. It is likely that the probability a fishery is selected for an ITQ depends on the pre-treatment characteristics given. It is also quite likely that the pre-treatment characteristics have an effect on the share of collapse for each fishery, i.e. our outcome variable of interest.
+
+```{r , include=TRUE}
+rm(list=ls()) # clean environment
+
+## Load Data
+fisheries_df <- read.csv(here::here("data", "final_fisheries_data.csv"))
+
+## Prepare Data
+# Change all column names to lowercase
+colnames(fisheries_df) <- tolower(colnames(fisheries_df))
+
+```
+## Pretreatment Ecosystem Characteristic Comparison, Visual _(3 pts)_
+(a) Compare the distributions of pre-treatment ecosystem characteristics (i.e. MET1, MET2, ,,, MET6) between the treated and the control groups by drawing back to back histograms [2 pts]. Write one sentence discussing the (dis)similarity between the two groups [1pt].
+
+```{r}
+# create MET column
+fisheries_df <- fisheries_df %>%
+  mutate(met = case_when(
+    met1 == 1 ~ 1,
+    met2 == 1 ~ 2,
+    met3 == 1 ~ 3,
+    met4 == 1 ~ 4,
+    met5 == 1 ~ 5,
+    met6 == 1 ~ 6))
+
+# Convert MET to factors
+fisheries_df$met <- as.factor(fisheries_df$met)
+
+# Aggregate data and negate count for control
+fisheries_summary <- fisheries_df %>%
+  count(met, itq) %>%
+  spread(key = itq, value = n) %>%
+  gather(key = itq, value = 'count', -met) %>% 
+  mutate(count = if_else(itq == '0', -count, count))
+
+# Create histograms
+ggplot(fisheries_summary, aes(x = met, y = count, fill = as.factor(itq))) +
+  geom_col() +
+  scale_y_continuous(labels = function(x) abs(x), limits = c(-2000, 2000)) +
+  coord_flip() +
+  labs(title = "Covariates comparison", x = "MET", y = "Count") +
+  scale_fill_brewer(palette = "Set2", name = "ITQ",
+                    labels = c("0" = "control", "1" = "treatment")) +
+  theme_minimal()
+
+```
+
+
+## Pretreatment Ecosystem Characteristic Comparison, Mean differences _3 pts)_
+(b) Do a test on mean differences between the treated and control groups for the species richness index (IND_SR) and commercial value (COMM_VAL) variables. Interpret the results (estimated difference and significance) [2 pts] and make a conclusion regarding the similarity between the groups [1pt]. 
+
+```{r , include=TRUE}
+## Mean Differences
+# t-test for IND_SR
+t.test(ind_sr ~ itq, data = fisheries_df)
+
+# t-test for COMM_VAL
+t.test(comm_val ~ itq, data = fisheries_df)
+
+```
+
+
+## Treatment Ignorability _(1 pt)_
+(c) Based on your results from (a) and (b), do you see a problem with just comparing the outcome variable means between treated and untreated fisheries? 
+
+Yes
+
+## Propensity Scores _(2 pts)_
+(d) Estimate the propensity scores (probability of being treated) using a logit model, assume that all covariates are relevant and should be included in the estimation [0.5 pt]. Draw separate histograms (back to back) of the propensity scores for the treated and the untreated group [0.5 pt]. Comment on the overlap, do you have any concerns? Why/why not? [1]
+```{r , include=TRUE}
+## Propensity Score Estimates
+
+# Estimation of propensity scores with the glm function and logit model
+ps_reg <- glm(itq ~ met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+          data = fisheries_df, family = binomial())
+
+# Attach the predicted propensity score	to the data frame
+fisheries_df$psvalue <- predict(ps_reg, type	= "response")
+
+# Drawing back to back histograms for propensity scores for treated and non-treated before matching
+histbackback(split(fisheries_df$psvalue, fisheries_df$itq),
+             main = "Propensity score before matching", xlab = c("control", "treatment"), xlim = c(-600, 800))
+
+
+```
+
+
+
+## ATT with Nearest Neighbor Matching _(3 pts: 2 pt estimate, 1 pt interpretation)_
+(e) Use the propensity scores from (d) to estimate the Average Treatment Effect on the Treated (ATT) with a nearest neighbor matching estimator. Interpret the result (just the size of the estimate)
+```{r , include=TRUE}
+## Nearest Neighbor Matching
+
+# Match using	nearest-neighbor approach (treated units are assigned the non-treated unit with the closest propensity score as match)
+nn_matching <- matchit(itq ~ met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+                       data = fisheries_df, method = "nearest", ratio = 1)
+match_data = match.data(nn_matching)
+
+## Estimate ATT
+
+# Calculate sum of the differences of outcomes between matches
+sumdiff_data <- match_data %>%
+  group_by(subclass) %>%
+  mutate(diff = coll_share[itq==1] - coll_share[itq==0])
+sumdiff <- sum(sumdiff_data$diff)/2
+
+# Divide sum of the difference by the number treated to generate ATT estimate
+ATT_nn = sumdiff / sum(match_data$itq)
+ATT_nn
+
+```
+
+
+## ATE with WLS _(3 pts: 1 pt estimate, 1 pt interpretation)_
+(f) Estimate the Average Treatment Effect (ATE) using the weighted least squares on the full sample. Interpret the estimated size and conclude if it is significantly different from zero from a statistical perspective.
+```{r , include=TRUE}
+## WLS Matching
+
+# calculation of the weights (see slide 25 of lecture 5)
+PS <- fisheries_df$psvalue
+D <- fisheries_df$itq
+
+fisheries_df$wgt = (D/PS + (1-D)/(1-PS))
+
+#### Weighted least Squares (WLS) Estimates
+reg_wls	<-lm(coll_share ~ itq + met1 + met2 + met3 + met4 + met5 + met6 + ind_sr + comm_val,
+               data = fisheries_df, weights = wgt)
+
+## Estimate ATE
+
+# Extracting the coefficients table
+summary_reg <- summary(reg_wls)
+summary_reg$coefficients %>% 
+  kbl(caption = "WLS estimates") %>%  # Generate table
+  kable_classic(full_width = FALSE)
+
+```
+
+
+# Part 2 Difference in Difference Estimation _(10 points total + 3pts extra credit)_
+
+\indent Here we return for a final time to the dataset from Gertler, Martinez, and Rubio-Codina (2012) and use a different way of estimating the effect of the Mexican conditional cash transfer on the value of animal holdings of recipients. We’ll use the panel data from assignment 2, where you have both the pre-program and post-program observations. See Template for dataset preparation instructions.
+
+\indent **Data Preparation**
+
+\indent *Note: You will need to install the packages plm and dplyr (included in template preamble). Again, you can find a description of the variables at the bottom of PDF and HERE.
+
+Prepare Data: Load the new data (progresa_pre_1997.csv) and the follow-up data (progresa_post_1999.csv) into R. Note that we created a time denoting variable (with the same name, 'year') in BOTH datasets. Again, you will create a panel dataset by appending the data (i.e. binding the dataset row-wise together creating a single dataset). We want to examine the same outcome variable as before, value of family animal holdings (vani). You will use the full dataset for each estimate. NOTE: you should not change any NAs from the TREATED column in your analysis, as we expect that spillover was likely in this program. NAs will be excluded from your calculations/estimations.
+
+```{r , include=TRUE, echo=FALSE}
+rm(list=ls()) # clean environment
+
+## Load/Prep Data
+# How I setup my coding flow
+# Keep project WD, set extension to get data from google drive 
+# data_wd <- "/Users/elliottfinn/Library/CloudStorage/GoogleDrive-elliottfinn@ucsb.edu/Shared drives/EDS241/Assignments/Assignment 2"
+
+# Load 1997 and 1999 Progresa datasets
+
+####### CODE FIX FOR FINAL ######
+
+### Append post to pre dataset 
+# progresa_full <- rbind(progresa_pre_1997, progresa_post_1999) # same as original
+#(note, you can keep NAs in the data- they'll be excluded from any estimates etc)
+#progresa_full <- progresa_full %>%
+#  group_by(hhid) %>% filter(n() == 2) %>%
+#  ungroup()
+# This removes all families lost to attrition, 
+# in other words. Families who were treated/controls in the program, but did not get measured
+# in the second year. This can happen for many reasons with observational data, you often
+# lose participants as studies go on for longer periods of time.
+
+rm(progresa_pre_1997, progresa_post_1999) # clean unused data
+
+```
+## DiD Estimator, ATE _(5 pts: 3 pts estimate, 2 pts interpretation)_
+(a) Calculate the DiD estimator of the treatment effect (ATE) of the program on the value of animal holdings (vani)  “manually” i.e. based on group mean values without running a regression. Report and interpret the result (Note: no significance test or standard errors is possible, so you do not need to report these values).
+```{r, include=TRUE}
+
+## Estimate ATE with DiD estimator manually. 
+# You will need to calculate various means to get this estimate
+
+              
+## Compute the Difference-in-Differences
+
+```
+
+## Difference in Difference using OLS _(5 pts)_
+(b) Now set up an OLS-regression using group mean values to estimate the same ATE. Interpret the estimated treatment effect [3 pts]. Also interpret the coefficients on the time dummy and the group dummy variable (see interpretation done in class in lecture 9) [2 pts]. 
+
+\indent **Hints:** You will need to create a new dataframe with a variety of dummy variables to do this. The R example provided with the DiD module (and/or the excel file) should help.
+
+```{r, include=TRUE}
+
+## Create a new data frame for OLS regression
+
+## Run the OLS regression w/dummies
+
+## Report OLS Model results Print the summary of the OLS model
+
+
+```
+
+# Extra Credit: ATE with OLS using full dataset _(3 pts: 2 pts estimate, 1 pt interpretation)_
+(c) Estimate the ATE with an OLS-regression based on the original units as observations (i.e. not with group mean values, you will need to use the entire dataset). Even though the specification is the same as in the regression with the group mean values above, you’ll need to create new indicator variables for the treatment group and the post treatment time period as well as their interaction term. Verify that you get the same result as above. Now report also on the precision of the estimation and test whether the estimated coefficient is different from zero. 
+
+```{r, include=TRUE}
+## Create the dummy variables (you'll need 3)
+
+
+## OLS regression
+
+
+# Present Regressions in Table
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

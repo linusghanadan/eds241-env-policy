@@ -160,7 +160,7 @@ bind_rows(
 
 [With the exception of the diabetes covariate, the differences in the mean proportions/means of all other covariates observed in smoking and non-smoking mothers were each statistically significant at alpha level of 0.01. These significant differences provide empirical evidence against our assumption of treatment ignorability conditional on the covariates because our result shows that the two groups (smoking mothers and non-smoking mothers) are systematically different from one another for all covariates looked at in this study except diabetes]{style="color:navy;"}
 
-[To help us further assess the treatment ignorability assumption, we could compute the standard difference between the two groups (smoking mothers and non-smoking mothers) for each covariate variable and see how many of these standard differences were significantly different than zero based on p-value. We could also run a chi-squared test to assess whether differences across all covariates were altogether significantly different than zero based on p-value.]{style="color:navy;"}
+[To help us further assess the treatment ignorability assumption, we could compute the standard difference between the two groups (smoking mothers and non-smoking mothers) for each covariate variable and see how many of these standard differences were significantly different than zero (evaluate based on p-values). We could also run a chi-squared test to assess whether differences across all covariates were altogether significantly different than zero (evaluate based on p-value)]{style="color:navy;"}
 
 
 ## ATE and Covariate Balance _(3 pts)_

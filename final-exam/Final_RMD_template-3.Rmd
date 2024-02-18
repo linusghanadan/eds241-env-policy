@@ -3,7 +3,7 @@ title: "EDS241 final exam"
 author: "Linus Ghanadan"
 date: "2-17-24"
 output: 
-  html_document:
+  pdf_document:
     toc: false
     number_sections: yes
 header-includes:
@@ -135,25 +135,37 @@ ggplot(fisheries_summary, aes(x = met, y = count, fill = as.factor(itq))) +
 
 ```
 
+[Compared to fisheries in the control group (not regulated by an ITQ), fisheries in the treatment group (regulated by an ITQ) were less likely to be coral reefs or mangrove forests and more likely to be kelp forests, seagrass meadows, open ocean, or deep sea (these differences are particularly pronounced for open ocean and deep sea).]{style="color:navy;"}
 
 ## Pretreatment Ecosystem Characteristic Comparison, Mean differences _3 pts)_
 (b) Do a test on mean differences between the treated and control groups for the species richness index (IND_SR) and commercial value (COMM_VAL) variables. Interpret the results (estimated difference and significance) [2 pts] and make a conclusion regarding the similarity between the groups [1pt]. 
 
 ```{r , include=TRUE}
-## Mean Differences
-# t-test for IND_SR
+# calculate mean difference for IND_SR
+mean_diff_ind_sr <- mean(fisheries_df$ind_sr[fisheries_df$itq == 1]) - mean(fisheries_df$ind_sr[fisheries_df$itq == 0])
+paste("mean difference for IND_SR:", mean_diff_ind_sr)
+# mean difference t-test for IND_SR
 t.test(ind_sr ~ itq, data = fisheries_df)
 
-# t-test for COMM_VAL
+# calculate mean difference for COMM_VAL
+mean_diff_comm_val <- mean(fisheries_df$comm_val[fisheries_df$itq == 1]) - mean(fisheries_df$comm_val[fisheries_df$itq == 0])
+paste("mean difference for COMM_VAL:", mean_diff_comm_val)
+# mean difference t-test for COMM_VAL
 t.test(comm_val ~ itq, data = fisheries_df)
 
 ```
 
+[For species richness (SR) index in 1980, we reject the null hypothesis, at an alpha level of <0.001, that the difference in the mean SR index between the control (not regulated by an ITQ) and treatment (regulated by an ITQ) groups is zero. We estimate this mean difference to be about 8.83 index units (where the mean SR index is lower in the treatment group), and our 95% confidence interval for the mean difference is from 8.41 to 9.24 index units.]{style="color:navy;"}
+
+[Regarding the commercial value of fisheries in 1980, we also reject the null hypothesis, at an alpha level of <0.001, that the difference in the mean SR index between the control (not regulated by an ITQ) and treatment (regulated by an ITQ) groups is zero. We estimate this mean difference to be about 32.35 million USD (where the mean commercial value is lower in the treatment group), and our 95% confidence interval for the mean difference is from 30.74 to 33.95 million USD.]{style="color:navy;"}
+
+[Thus, both of our tests indicate that there are significant differences in the pre-treatment characteristics of the control (not regulated by an ITQ) and treatment (regulated by an ITQ) fisheries. On average, fisheries that were regulated by an ITQ were both significantly less biodiverse in 1980 and significantly less commercially valueable in 1980, compared to fisheries not regulated by an ITQ.]{style="color:navy;"}
 
 ## Treatment Ignorability _(1 pt)_
 (c) Based on your results from (a) and (b), do you see a problem with just comparing the outcome variable means between treated and untreated fisheries? 
 
-Yes
+[Yes, I do see a problem with just comparing the outcome variable (share of years between 1990 and 2012 where harvest was more than 10% below maximum recorded harvest) means between the treated (regulated by an ITQ) and untreated (not regulated by an ITQ) fisheries because of the statistically significant differences in the covariates between these two groups that we would not be controlling for. Our histograms from Part A show differences in the count of fisheries in the treated and untreated groups across the six marine ecosystem types, and these differences were particularly pronounced for ecosystems that were classified as open ocean or deep sea (both appear to be statistically significant). In addition, our two t-tests from Part B indicate, with high statistical significance (p<0.001), mean differences between the two groups for the biodiversity in 1980 and commercial value in 1980. These covariates are likely to be determinants of whether a fishery collapses, so it would be very misleading to just compare the outcome variable means of the treatment and untreated fisheries, since there are likely to be effects from the differences in covariate variables that will be misrepresented as effects from the treatment variable.]{style="color:navy;"}
+
 
 ## Propensity Scores _(2 pts)_
 (d) Estimate the propensity scores (probability of being treated) using a logit model, assume that all covariates are relevant and should be included in the estimation [0.5 pt]. Draw separate histograms (back to back) of the propensity scores for the treated and the untreated group [0.5 pt]. Comment on the overlap, do you have any concerns? Why/why not? [1]
@@ -170,11 +182,9 @@ fisheries_df$psvalue <- predict(ps_reg, type	= "response")
 # Drawing back to back histograms for propensity scores for treated and non-treated before matching
 histbackback(split(fisheries_df$psvalue, fisheries_df$itq),
              main = "Propensity score before matching", xlab = c("control", "treatment"), xlim = c(-600, 800))
-
-
 ```
 
-Remove met6 is correct?
+[There is some overlap in the distributions of our histograms, mainly for fisheries that have propensity scores between 0.4 and 0.6. I'm concerned about the lack of overlap for fisheries with high propensity scores, as this may lead to issues when we do nearest-neighbor matching. During nearest-neighbor matching, treated units are assigned to the non-treated unit with the closest propensity score as a match, and we want the resulting set of fisheries to have a great deal of overlap in their propensity scores to ensure a balance in covariates, since they are also likely to have an influence on our outcome variable. However, since there are very few fisheries in the control group with high propensity scores, I'm concerned that even after nearest-neighbor matching occurs, there will still be a lack of overlap in the distributions of our histograms.]{style="color:navy;"}
 
 
 ## ATT with Nearest Neighbor Matching _(3 pts: 2 pt estimate, 1 pt interpretation)_
@@ -200,6 +210,8 @@ ATT_nn = sumdiff / sum(match_data$itq)
 ATT_nn
 
 ```
+
+[Using the matched data, we estimate the average effect of an ITQ on a fishery that had an ITQ to be a 7.13 percentage-point decrease in the share of years between 1990 and 2012 where the fishery experienced collapse. This estimated effect size only applies to fisheries that were regulated by an ITQ because we only defined counterfactuals for these fisheries. Thus, our average outcome only demonstrates the effect of an ITQ on fishery collapse as it pertains to fisheries that were regulated by an ITQ.]{style="color:navy;"}
 
 
 ## ATE with WLS _(3 pts: 1 pt estimate, 1 pt interpretation)_
@@ -227,6 +239,7 @@ summary_reg$coefficients %>%
 
 ```
 
+[Using the WLS estimator, we estimate the average effect of an ITQ on a fishery to be a 7.67 percentage-point decrease in the share of years between 1990 and 2012 where the fishery experienced collapse, with a standard error of 0.099 percentage-points. This estimated effect size applies to all fisheries because we did not remove any fisheries from our sample as we did when estimating effect size based on matching. Our very low p-value means we reject the null hypothesis that the difference is zero at an alpha level of <0.001.]{style="color:navy;"}
 
 # Part 2 Difference in Difference Estimation _(10 points total + 3pts extra credit)_
 

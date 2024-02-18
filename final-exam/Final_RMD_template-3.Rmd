@@ -296,44 +296,41 @@ mean_control_post <- mean(progresa_full$vani[progresa_full$treatment == 0 & prog
 
 \indent **Hints:** You will need to create a new dataframe with a variety of dummy variables to do this. The R example provided with the DiD module (and/or the excel file) should help.
 
-```{r, include=TRUE}
+```{r}
+# Create a new data frame for OLS regression
+ols_df <- data.frame(
+  treatment_dummy = c(1, 1, 0, 0),
+  post_treatment_time_dummy = c(0, 1, 0, 1),
+  vani_mean = c(mean_treat_pre, mean_treat_post, mean_control_pre, mean_control_post))
 
-## Create a new data frame for OLS regression
-# Assuming progresa_full is your dataset
-progresa_full$treat <- ifelse(progresa_full$treatment == 1, 1, 0)
-progresa_full$post <- ifelse(progresa_full$year == 1999, 1, 0)
-progresa_full$interaction <- progresa_full$treat * progresa_full$post
+# Run the OLS regression
+model <- lm(vani_mean ~ treatment_dummy + post_treatment_time_dummy + post_treatment_time_dummy*treatment_dummy, data = ols_df)
 
-## Run the OLS regression w/dummies
-# OLS regression
-model <- lm(vani ~ treat + post + interaction, data = progresa_full)
-
-
-## Report OLS Model results Print the summary of the OLS model
+# Report OLS Model results
 summary(model)
 
 ```
+
 
 # Extra Credit: ATE with OLS using full dataset _(3 pts: 2 pts estimate, 1 pt interpretation)_
 (c) Estimate the ATE with an OLS-regression based on the original units as observations (i.e. not with group mean values, you will need to use the entire dataset). Even though the specification is the same as in the regression with the group mean values above, you’ll need to create new indicator variables for the treatment group and the post treatment time period as well as their interaction term. Verify that you get the same result as above. Now report also on the precision of the estimation and test whether the estimated coefficient is different from zero. 
 
 ```{r, include=TRUE}
 ## Create the dummy variables (you'll need 3)
-
+progresa_full$treatment_dummy <- ifelse(progresa_full$treatment == 1, 1, 0)
+progresa_full$post_treatment_time_dummy <- ifelse(progresa_full$year == 1999, 1, 0)
+progresa_full$interaction_dummy <- progresa_full$treatment_dummy * progresa_full$post_treatment_time_dummy
 
 ## OLS regression
-
+model_full <- lm(vani ~ treatment_dummy + post_treatment_time_dummy + interaction_dummy, data = progresa_full)
 
 # Present Regressions in Table
-
+summary_reg <- summary(model_full)
+summary_reg$coefficients %>% 
+  kbl(caption = "DiD estimation") %>%  # Generate table
+  kable_classic(full_width = FALSE)
 
 ```
-
-
-
-
-
-
 
 
 

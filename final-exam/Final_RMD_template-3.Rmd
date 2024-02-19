@@ -284,25 +284,22 @@ rm(progresa_pre_1997, progresa_post_1999) # clean unused data
 ## DiD Estimator, ATE _(5 pts: 3 pts estimate, 2 pts interpretation)_
 (a) Calculate the DiD estimator of the treatment effect (ATE) of the program on the value of animal holdings (vani)  “manually” i.e. based on group mean values without running a regression. Report and interpret the result (Note: no significance test or standard errors is possible, so you do not need to report these values).
 ```{r, include=TRUE}
-
 ## Estimate ATE with DiD estimator manually
 
-# Calculate mean vani for treatment group before the program
+# Calculate mean vani in treatment group before and after program
 mean_treat_pre <- mean(progresa_full$vani[progresa_full$treatment == 1 & progresa_full$year == 1997], na.rm = TRUE)
-
-# Calculate mean vani for treatment group after the program
 mean_treat_post <- mean(progresa_full$vani[progresa_full$treatment == 1 & progresa_full$year == 1999], na.rm = TRUE)
 
-# Calculate mean vani for control group before the program
+# Calculate mean vani in control group before and after program
 mean_control_pre <- mean(progresa_full$vani[progresa_full$treatment == 0 & progresa_full$year == 1997], na.rm = TRUE)
-
-# Calculate mean vani for control group after the program
 mean_control_post <- mean(progresa_full$vani[progresa_full$treatment == 0 & progresa_full$year == 1999], na.rm = TRUE)
 
-# DiD estimator
+# Calculate DiD estimator
 (mean_treat_post - mean_treat_pre) - (mean_control_post - mean_control_pre)
 
 ```
+
+[From our manual calculation of the DiD estimator, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD (where program participants had a higher average value of animal holdings at the end of the program). To interpret the result in this way, we are assuming that our control (units that did not participate in program) and treatment (program participants) group satisfy the parallel trends assumption. This means that we're assuming that if the program did not exist, the mean value of animal of animal holdings in the units that were in the treatment group would have changed at the same rate as the units in the control group (i.e., we're assuming that the control group provides a valid counterfactual).]{style="color:navy;"}
 
 ## Difference in Difference using OLS _(5 pts)_
 (b) Now set up an OLS-regression using group mean values to estimate the same ATE. Interpret the estimated treatment effect [3 pts]. Also interpret the coefficients on the time dummy and the group dummy variable (see interpretation done in class in lecture 9) [2 pts]. 
@@ -317,12 +314,21 @@ ols_df <- data.frame(
   vani_mean = c(mean_treat_pre, mean_treat_post, mean_control_pre, mean_control_post))
 
 # Run the OLS regression
-model <- lm(vani_mean ~ treatment_dummy + post_treatment_time_dummy + post_treatment_time_dummy*treatment_dummy, data = ols_df)
+ols_reg_group_means <- lm(vani_mean ~ treatment_dummy + post_treatment_time_dummy + post_treatment_time_dummy*treatment_dummy, data = ols_df)
 
-# Report OLS Model results
-summary(model)
+# Present Regressions in Table
+summary_reg <- summary(ols_reg_group_means)
+summary_reg$coefficients %>% 
+  kbl(caption = "DiD ATE estimation with group mean values") %>%  # Generate table
+  kable_classic(full_width = FALSE)
 
 ```
+
+[From our regression using group mean values, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD. Just like in Part A, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect.]{style="color:navy;"}
+
+[The coefficient on our treatment dummy variable tells us that we estimate the mean difference in the outcome variable (value of animal holdings) between the treatment group (program participants) and the control group (non-participants) before the program started to have been 237.69 USD (where program participants had a lower average value of animal holdings than non-participants prior to the start of the program).]{style="color:navy;"}
+
+[The coefficient on our post treatment time dummy variable tells us that we estimate the mean change in the outcome variable (value of animal holdings) between the beginning and end of the program for the control group (non-participants in program) to be 1,156.75 USD (where non-participants had a lower average value of animal holdings when the program ended than when it started).]{style="color:navy;"}
 
 
 # Extra Credit: ATE with OLS using full dataset _(3 pts: 2 pts estimate, 1 pt interpretation)_
@@ -335,20 +341,19 @@ progresa_full$post_treatment_time_dummy <- ifelse(progresa_full$year == 1999, 1,
 progresa_full$interaction_dummy <- progresa_full$treatment_dummy * progresa_full$post_treatment_time_dummy
 
 ## OLS regression
-model_full <- lm(vani ~ treatment_dummy + post_treatment_time_dummy + interaction_dummy, data = progresa_full)
+ols_reg_all_values <- lm(vani ~ treatment_dummy + post_treatment_time_dummy + interaction_dummy, data = progresa_full)
 
 # Present Regressions in Table
-summary_reg <- summary(model_full)
+summary_reg <- summary(ols_reg_all_values)
 summary_reg$coefficients %>% 
-  kbl(caption = "DiD estimation") %>%  # Generate table
+  kbl(caption = "DiD ATE estimation with all values") %>%  # Generate table
   kable_classic(full_width = FALSE)
 
 ```
 
+[From our regression using the full dataset, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD, with a standard error of about 113.78 USD. Just like in Part A and Part B, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect. Furthermore, our p-value of 0.011 tells us that, at an alpha level of 0.05, we reject the null hypothesis that there was no average effect of the cash transfer program on value of animal holdings.]{style="color:navy;"}
 
+[The coefficient on our treatment dummy variable tells us that we estimate the mean difference in the outcome variable (value of animal holdings) between the treatment group (program participants) and the control group (non-participants) before the program started to have been 237.69 USD (where program participants had a lower average value of animal holdings than non-participants prior to the start of the program), with a standard error of 80.45 USD. Our p-value of <0.01 tells us that, at an alpha level of 0.01, we reject the null hypothesis that there was a mean difference of zero.]{style="color:navy;"}
 
-
-
-
-
+[The coefficient on our post treatment time dummy variable tells us that we estimate the mean change in the outcome variable (value of animal holdings) between the beginning and end of the program for the control group (non-participants in program) to be 1,156.75 USD (where non-participants had a lower average value of animal holdings when the program ended than when it started), with a standard error of 85.72 USD. Our p-value of 0.003 tells us that, at an alpha level of 0.01, we reject the null hypothesis that there was a mean change of zero.]{style="color:navy;"}
 

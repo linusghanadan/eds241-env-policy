@@ -2,14 +2,15 @@
 title: "EDS241 final exam"
 author: "Linus Ghanadan"
 date: "2-17-24"
-output: 
+output:
+  html_document:
+    toc: no
+    df_print: paged
   pdf_document:
-    toc: false
+    toc: no
     number_sections: yes
-header-includes:
-  \setlength{\parindent}{1em}
-  \usepackage{float}
-  \renewcommand{\thesubsection}{Question (\alph{subsection})}
+header-includes: \setlength{\parindent}{1em} \usepackage{float} \renewcommand{\thesubsection}{Question
+  (\alph{subsection})}
 --- 
 
 Make sure to read through the setup in markdown. Remember to write out interpretations and report your results in writing/ table/plot forms.
@@ -143,13 +144,13 @@ ggplot(fisheries_summary, aes(x = met, y = count, fill = as.factor(itq))) +
 ```{r , include=TRUE}
 # calculate mean difference for IND_SR
 mean_diff_ind_sr <- mean(fisheries_df$ind_sr[fisheries_df$itq == 1]) - mean(fisheries_df$ind_sr[fisheries_df$itq == 0])
-paste("mean difference for IND_SR:", mean_diff_ind_sr)
+mean_diff_ind_sr
 # mean difference t-test for IND_SR
 t.test(ind_sr ~ itq, data = fisheries_df)
 
 # calculate mean difference for COMM_VAL
 mean_diff_comm_val <- mean(fisheries_df$comm_val[fisheries_df$itq == 1]) - mean(fisheries_df$comm_val[fisheries_df$itq == 0])
-paste("mean difference for COMM_VAL:", mean_diff_comm_val)
+mean_diff_comm_val
 # mean difference t-test for COMM_VAL
 t.test(comm_val ~ itq, data = fisheries_df)
 
@@ -164,7 +165,7 @@ t.test(comm_val ~ itq, data = fisheries_df)
 ## Treatment Ignorability _(1 pt)_
 (c) Based on your results from (a) and (b), do you see a problem with just comparing the outcome variable means between treated and untreated fisheries? 
 
-[Yes, I do see a problem with just comparing the outcome variable (share of years between 1990 and 2012 where harvest was more than 10% below maximum recorded harvest) means between the treated (regulated by an ITQ) and untreated (not regulated by an ITQ) fisheries because of the statistically significant differences in the covariates between these two groups that we would not be controlling for. Our histograms from Part A show differences in the count of fisheries in the treated and untreated groups across the six marine ecosystem types, and these differences were particularly pronounced for ecosystems that were classified as open ocean or deep sea (both appear to be statistically significant). In addition, our two t-tests from Part B indicate, with high statistical significance (p<0.001), mean differences between the two groups for the biodiversity in 1980 and commercial value in 1980. These covariates are likely to be determinants of whether a fishery collapses, so it would be very misleading to just compare the outcome variable means of the treatment and untreated fisheries, since there are likely to be effects from the differences in covariate variables that will be misrepresented as effects from the treatment variable.]{style="color:navy;"}
+[Yes, I do see a problem with just comparing the outcome variable (share of years between 1990 and 2012 with fishery collapse, meaning harvest was more than 10% below maximum recorded harvest) means between the treated (regulated by an ITQ) and untreated (not regulated by an ITQ) fisheries because of the statistically significant differences in the covariates between these two groups that we would not be controlling for. Our histograms from Part A show differences in the count of fisheries in the treated and untreated groups across the six marine ecosystem types, and these differences were particularly pronounced for ecosystems that were classified as open ocean or deep sea (both appear to be statistically significant). In addition, our two t-tests from Part B indicate, with high statistical significance (p<0.001), mean differences between the two groups for both the biodiversity in 1980 and commercial value in 1980. These covariates are likely to be determinants of whether a fishery collapses, so it would be very misleading to just compare the outcome variable means of the treatment and untreated fisheries, since there are likely to be effects from the differences in covariate variables that will be misrepresented as effects from the treatment variable.]{style="color:navy;"}
 
 
 ## Propensity Scores _(2 pts)_
@@ -223,9 +224,10 @@ ATT_nn
 PS <- fisheries_df$psvalue
 D <- fisheries_df$itq
 
+# add weights to data frame
 fisheries_df$wgt = (D/PS + (1-D)/(1-PS))
 
-#### Weighted least Squares (WLS) Estimates
+# run WLS regression
 reg_wls	<-lm(coll_share ~ itq + met1 + met2 + met3 + met4 + met5 + ind_sr + comm_val,
                data = fisheries_df, weights = wgt)
 
@@ -239,7 +241,7 @@ summary_reg$coefficients %>%
 
 ```
 
-[Using the WLS estimator, we estimate the average effect of an ITQ on a fishery to be a 7.67 percentage-point decrease in the share of years between 1990 and 2012 where the fishery experienced collapse, with a standard error of 0.099 percentage-points. This estimated effect size applies to all fisheries because we did not remove any fisheries from our sample as we did when estimating effect size based on matching. Our very low p-value means we reject the null hypothesis that the difference is zero at an alpha level of <0.001.]{style="color:navy;"}
+[Using the WLS estimator, we estimate the average effect of an ITQ on a fishery to be a 7.67 percentage-point decrease in the share of years between 1990 and 2012 where the fishery experienced collapse, with a standard error of 0.099 percentage-points. The very low p-value means we reject the null hypothesis that the average effect of an ITQ is zero at an alpha level of <0.001. Our estimated effect size, as calculated here, applies to all fisheries because we did not remove any fisheries from our sample, like we did when estimating effect size based on matching.]{style="color:navy;"}
 
 # Part 2 Difference in Difference Estimation _(10 points total + 3pts extra credit)_
 
@@ -324,7 +326,7 @@ summary_reg$coefficients %>%
 
 ```
 
-[From our regression using group mean values, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD. Just like in Part A, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect.]{style="color:navy;"}
+[From our regression using group mean values, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD (where program participants had a higher average value of animal holdings at the end of the program). Just like in Part A, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect.]{style="color:navy;"}
 
 [The coefficient on our treatment dummy variable tells us that we estimate the mean difference in the outcome variable (value of animal holdings) between the treatment group (program participants) and the control group (non-participants) before the program started to have been 237.69 USD (where program participants had a lower average value of animal holdings than non-participants prior to the start of the program).]{style="color:navy;"}
 
@@ -351,7 +353,7 @@ summary_reg$coefficients %>%
 
 ```
 
-[From our regression using the full dataset, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD, with a standard error of about 113.78 USD. Just like in Part A and Part B, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect. Furthermore, our p-value of 0.011 tells us that, at an alpha level of 0.05, we reject the null hypothesis that there was no average effect of the cash transfer program on value of animal holdings.]{style="color:navy;"}
+[From our regression using the full dataset, we estimate the average effect of the cash transfer program on value of animal holdings to be about 287.91 USD (where program participants had a higher average value of animal holdings at the end of the program), with a standard error of about 113.78 USD. Just like in Part A and Part B, we have to assume that the control group (units that did not participate in program) provides a valid counterfactual for what would have happened to units in our treatment group (program participants) had they not participated in the program to interpret this result as the average treatment effect. Furthermore, our p-value of 0.011 tells us that, at an alpha level of 0.05, we reject the null hypothesis that there was no average effect of the cash transfer program on value of animal holdings.]{style="color:navy;"}
 
 [The coefficient on our treatment dummy variable tells us that we estimate the mean difference in the outcome variable (value of animal holdings) between the treatment group (program participants) and the control group (non-participants) before the program started to have been 237.69 USD (where program participants had a lower average value of animal holdings than non-participants prior to the start of the program), with a standard error of 80.45 USD. Our p-value of <0.01 tells us that, at an alpha level of 0.01, we reject the null hypothesis that there was a mean difference of zero.]{style="color:navy;"}
 
